@@ -75,56 +75,6 @@ function getUserFriendlyError(error) {
   return "Something went wrong while searching emails. Please try again.";
 }
 
-export async function registerRoutes(httpServer, app) {
-  
-  app.post("/api/findcode", async (req, res) => {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: "Please enter an email address to search." });
-    }
-
-    const imapConfig = {
-      user: process.env.EMAIL_ADDRESS,
-      password: process.env.EMAIL_PASSWORD,
-      host: process.env.EMAIL_SERVER || "imap.gmail.com",
-      port: parseInt(process.env.EMAIL_PORT || "993", 10),
-      tls: process.env.EMAIL_TLS !== "false",
-      tlsOptions: { rejectUnauthorized: false },
-    };
-
-    if (!imapConfig.user || !imapConfig.password) {
-      return res.status(500).json({ 
-        error: "Email service is not configured. Please contact the administrator." 
-      });
-    }
-
-    try {
-      const result = await searchNetflixEmail(imapConfig, email);
-      if (result) {
-        const translatedSubject = await translateToEnglish(result.subject);
-        const translatedContent = await translateToEnglish(result.textContent);
-        
-        res.json({
-          ...result,
-          subject: translatedSubject,
-          textContent: translatedContent
-        });
-      } else {
-        res.status(404).json({ 
-          error: "No Netflix email found for this address. Please make sure the email exists in the inbox." 
-        });
-      }
-    } catch (error) {
-      res.status(500).json({ 
-        error: getUserFriendlyError(error)
-      });
-    }
-  });
-
-  return httpServer;
-}
-
 function searchNetflixEmail(imapConfig, userEmail) {
   return new Promise((resolve, reject) => {
     const imap = new Imap(imapConfig);
@@ -270,4 +220,53 @@ function searchNetflixEmail(imapConfig, userEmail) {
 
     imap.connect();
   });
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Please enter an email address to search." });
+  }
+
+  const imapConfig = {
+    user: process.env.EMAIL_ADDRESS,
+    password: process.env.EMAIL_PASSWORD,
+    host: process.env.EMAIL_SERVER || "imap.gmail.com",
+    port: parseInt(process.env.EMAIL_PORT || "993", 10),
+    tls: process.env.EMAIL_TLS !== "false",
+    tlsOptions: { rejectUnauthorized: false },
+  };
+
+  if (!imapConfig.user || !imapConfig.password) {
+    return res.status(500).json({ 
+      error: "Email service is not configured. Please contact the administrator." 
+    });
+  }
+
+  try {
+    const result = await searchNetflixEmail(imapConfig, email);
+    if (result) {
+      const translatedSubject = await translateToEnglish(result.subject);
+      const translatedContent = await translateToEnglish(result.textContent);
+      
+      res.status(200).json({
+        ...result,
+        subject: translatedSubject,
+        textContent: translatedContent
+      });
+    } else {
+      res.status(404).json({ 
+        error: "No Netflix email found for this address. Please make sure the email exists in the inbox." 
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ 
+      error: getUserFriendlyError(error)
+    });
+  }
 }

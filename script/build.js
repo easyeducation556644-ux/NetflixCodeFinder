@@ -21,4 +21,3 @@ const buildServer = async () => {
 
 await buildClient();
 await buildServer();
-console.log("Build completed successfully!");
