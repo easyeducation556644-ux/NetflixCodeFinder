@@ -101,7 +101,7 @@ export async function registerRoutes(httpServer, app) {
         res.json(result);
       } else {
         res.status(404).json({ 
-          error: "No Netflix verification code found for this email address. Make sure the email was sent within the last 30 days." 
+          error: "No Netflix email found for this address. Please make sure the email exists in the inbox." 
         });
       }
     } catch (error) {
@@ -126,27 +126,27 @@ function searchNetflixEmail(imapConfig, userEmail) {
           return reject(err);
         }
 
-        // Search for ALL recent emails to catch forwarded ones too
-        // We'll filter by Netflix content later in code
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const searchCriteria = [
-          ["SINCE", thirtyDaysAgo],
-        ];
+        console.log(`Mailbox opened. Total messages: ${box.messages.total}`);
 
-        imap.search(searchCriteria, (err, results) => {
+        // Search for ALL emails - no date limit
+        // We search for ALL emails and filter later
+        imap.search(["ALL"], (err, results) => {
           if (err) {
             imap.end();
             return reject(err);
           }
+
+          console.log(`Total emails found: ${results?.length || 0}`);
 
           if (!results || results.length === 0) {
             imap.end();
             return resolve(null);
           }
 
-          // Fetch more emails to find forwarded ones too
-          const latestEmails = results.slice(-50);
+          // Get the last 200 emails to search through (most recent)
+          const latestEmails = results.slice(-200);
+          console.log(`Fetching last ${latestEmails.length} emails...`);
+          
           const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
           const emailPromises = [];
 
@@ -179,83 +179,73 @@ function searchNetflixEmail(imapConfig, userEmail) {
           fetch.once("end", async () => {
             try {
               const emails = await Promise.all(emailPromises);
+              console.log(`Parsed ${emails.filter(e => e !== null).length} emails successfully`);
               
-              // Filter emails that contain the user's email (direct or forwarded)
-              const userEmailLower = userEmail.toLowerCase();
+              const userEmailLower = userEmail.toLowerCase().trim();
               
-              const householdEmail = emails
+              // Step 1: Find ALL emails that contain the user's email address anywhere
+              const userEmails = emails
                 .filter((email) => email !== null)
                 .filter((email) => {
-                  // Check if email is for this user (TO field, CC, or in body for forwarded)
                   const toAddresses = (email.to?.text || "").toLowerCase();
                   const ccAddresses = (email.cc?.text || "").toLowerCase();
+                  const fromAddresses = (email.from?.text || "").toLowerCase();
+                  const subject = (email.subject || "").toLowerCase();
                   const textContent = (email.text || "").toLowerCase();
                   const htmlContent = (email.html || "").toLowerCase();
                   
+                  // Check if user email appears anywhere in the email
                   return (
                     toAddresses.includes(userEmailLower) ||
                     ccAddresses.includes(userEmailLower) ||
+                    fromAddresses.includes(userEmailLower) ||
+                    subject.includes(userEmailLower) ||
                     textContent.includes(userEmailLower) ||
                     htmlContent.includes(userEmailLower)
                   );
-                })
-                .filter((email) => {
-                  // Check if email is from Netflix OR contains Netflix content (for forwarded emails)
-                  const fromAddress = (email.from?.text || "").toLowerCase();
-                  const subject = (email.subject || "").toLowerCase();
-                  const textContent = (email.text || "").toLowerCase();
-                  const htmlContent = (email.html || "").toLowerCase();
-                  
-                  const isFromNetflix = fromAddress.includes("netflix.com");
-                  const hasNetflixContent = 
-                    subject.includes("netflix") ||
-                    textContent.includes("netflix.com") ||
-                    htmlContent.includes("netflix.com");
-                  
-                  return isFromNetflix || hasNetflixContent;
-                })
-                .filter((email) => {
-                  const subject = (email.subject || "").toLowerCase();
-                  const textContent = (email.text || "").toLowerCase();
-                  const htmlContent = (email.html || "").toLowerCase();
-                  const combinedContent = subject + " " + textContent + " " + htmlContent;
-                  
-                  return (
-                    combinedContent.includes("household") ||
-                    combinedContent.includes("temporary access") ||
-                    combinedContent.includes("update your netflix household") ||
-                    combinedContent.includes("get a temporary code") ||
-                    combinedContent.includes("verification code") ||
-                    combinedContent.includes("access code")
-                  );
-                })
-                .filter((email) => {
-                  const subject = (email.subject || "").toLowerCase();
-                  return (
-                    !subject.includes("sign-in") &&
-                    !subject.includes("signin") &&
-                    !subject.includes("password reset") &&
-                    !subject.includes("reset your password")
-                  );
-                })
-                .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                });
+              
+              console.log(`Found ${userEmails.length} emails containing user address`);
+              
+              // Step 2: Filter for Netflix emails (from Netflix OR contains Netflix content)
+              const netflixEmails = userEmails.filter((email) => {
+                const fromAddress = (email.from?.text || "").toLowerCase();
+                const subject = (email.subject || "").toLowerCase();
+                const textContent = (email.text || "").toLowerCase();
+                const htmlContent = (email.html || "").toLowerCase();
+                
+                const isFromNetflix = fromAddress.includes("netflix");
+                const hasNetflixInSubject = subject.includes("netflix");
+                const hasNetflixContent = 
+                  textContent.includes("netflix") ||
+                  htmlContent.includes("netflix");
+                
+                return isFromNetflix || hasNetflixInSubject || hasNetflixContent;
+              });
+
+              console.log(`Found ${netflixEmails.length} Netflix-related emails`);
+
+              // Sort by date (newest first) and get the most recent one
+              const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+              const latestNetflixEmail = sortedEmails[0];
 
               imap.end();
 
-              if (!householdEmail) {
+              if (!latestNetflixEmail) {
                 return resolve(null);
               }
 
-              const textContent = householdEmail.text || "";
-              const htmlContent = householdEmail.html || "";
+              const textContent = latestNetflixEmail.text || "";
+              const htmlContent = latestNetflixEmail.html || "";
               const combinedContent = textContent + " " + htmlContent;
 
+              // Look for 4-digit codes
               const codeMatch = combinedContent.match(/\b(\d{4})\b/);
               const accessCode = codeMatch ? codeMatch[1] : null;
 
               // Find all Netflix links
               const linkMatches = combinedContent.match(
-                /https?:\/\/[^\s<>"]+netflix\.com[^\s<>"]*/gi
+                /https?:\/\/[^\s<>"']+netflix[^\s<>"']*/gi
               ) || [];
               const links = [...new Set(linkMatches.map(l => l.replace(/['">\]]+$/, "")))];
               const link = links[0] || null;
@@ -264,15 +254,16 @@ function searchNetflixEmail(imapConfig, userEmail) {
               const cleanText = extractCleanText(htmlContent) || textContent;
               
               resolve({
-                subject: householdEmail.subject,
-                receivedAt: householdEmail.date ? householdEmail.date.toISOString() : new Date().toISOString(),
-                from: householdEmail.from?.text || "",
-                to: householdEmail.to?.text || "",
+                subject: latestNetflixEmail.subject,
+                receivedAt: latestNetflixEmail.date ? latestNetflixEmail.date.toISOString() : new Date().toISOString(),
+                from: latestNetflixEmail.from?.text || "",
+                to: latestNetflixEmail.to?.text || "",
                 textContent: cleanText,
                 htmlContent: htmlContent,
                 accessCode,
                 link,
                 allLinks: links,
+                totalNetflixEmails: netflixEmails.length,
               });
             } catch (parseError) {
               imap.end();
