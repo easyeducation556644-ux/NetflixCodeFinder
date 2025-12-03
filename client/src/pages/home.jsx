@@ -29,11 +29,16 @@ export default function Home() {
 
   const searchMutation = useMutation({
     mutationFn: async (data) => {
-      const res = await apiRequest("POST", "/api/findcode", { email: data.email });
+      const res = await fetch("/api/findcode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      });
+      
       const json = await res.json();
       
       if (!res.ok) {
-        throw new Error(json.error || "Request failed");
+        throw new Error(json.error || "Something went wrong");
       }
       
       return json;
@@ -47,11 +52,6 @@ export default function Home() {
     },
     onError: (error) => {
       setResult(null);
-      toast({
-        variant: "destructive",
-        title: "Search Failed",
-        description: error.message,
-      });
     },
   });
 
