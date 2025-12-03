@@ -110,6 +110,7 @@ Preferred communication style: Simple, everyday language.
 - **imap**: IMAP protocol client for email server connections
 - **mailparser**: Email parsing and content extraction
 - **express**: HTTP server framework
+- **translatte**: Free translation library for auto-translating email content to English
 - **drizzle-orm**: Type-safe ORM (included but not actively used)
 - **@neondatabase/serverless**: Serverless PostgreSQL client (included but not actively used)
 
@@ -126,3 +127,26 @@ The application includes dependencies for PostgreSQL integration:
 - connect-pg-simple for session storage
 
 These are configured but not currently utilized by the core email lookup functionality. They provide infrastructure for future features like code history, user accounts, or analytics.
+
+## Vercel Deployment
+
+The application is configured for Vercel deployment with:
+- **vercel.json**: Configuration file for Vercel deployment
+- **api/findcode.js**: Serverless function for the API endpoint
+- **Build Output**: Static frontend built to `dist/public`
+
+### Deployment Steps for Vercel:
+1. Connect the repository to Vercel
+2. Set the following environment variables in Vercel dashboard:
+   - `EMAIL_ADDRESS`: Admin email address for IMAP connection
+   - `EMAIL_PASSWORD`: App password for the email account
+   - `EMAIL_SERVER`: IMAP server (default: imap.gmail.com)
+   - `EMAIL_PORT`: IMAP port (default: 993)
+   - `EMAIL_TLS`: Enable TLS (default: true)
+3. Deploy - Vercel will automatically build and deploy
+
+## Recent Changes
+
+- **Translation Feature**: Email subjects and content are now automatically translated to English using the translatte library
+- **Production Ready**: All console.log statements removed for production deployment
+- **Vercel Ready**: Added Vercel configuration and serverless API function
