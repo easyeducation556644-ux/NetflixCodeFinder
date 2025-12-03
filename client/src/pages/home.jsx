@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, CheckCircle, AlertCircle, Loader2, ExternalLink, Copy, Sparkles } from "lucide-react";
+import { Search, Mail, AlertCircle, Loader2, Sparkles, Tv, Clock } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -42,9 +42,7 @@ export default function Home() {
       setResult(data);
       toast({
         title: "Email Found",
-        description: data.accessCode 
-          ? `Access code: ${data.accessCode}` 
-          : "Email retrieved successfully.",
+        description: "Netflix email retrieved successfully.",
       });
     },
     onError: (error) => {
@@ -60,6 +58,32 @@ export default function Home() {
   function onSubmit(data) {
     setResult(null);
     searchMutation.mutate(data);
+  }
+
+  // Extract device info from email content
+  function extractDeviceInfo(textContent) {
+    const lines = (textContent || "").split("\n");
+    let deviceName = "";
+    let dateInfo = "";
+    
+    for (const line of lines) {
+      if (line.toLowerCase().includes("device") || line.toLowerCase().includes("tv") || line.toLowerCase().includes("hisense") || line.toLowerCase().includes("samsung") || line.toLowerCase().includes("lg")) {
+        deviceName = line.trim();
+      }
+      if (line.match(/\d{1,2}[,\s]+\d{2}:\d{2}/i) || line.toLowerCase().includes("december") || line.toLowerCase().includes("january") || line.match(/utc/i)) {
+        dateInfo = line.trim();
+      }
+    }
+    
+    return { deviceName, dateInfo };
+  }
+
+  // Get the main Netflix action link
+  function getMainLink(links) {
+    if (!links || links.length === 0) return null;
+    // Prefer the travel/verify link or account link
+    const verifyLink = links.find(l => l.includes("travel/verify") || l.includes("verify"));
+    return verifyLink || links[0];
   }
 
   return (
@@ -203,7 +227,7 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Results Section */}
+        {/* Netflix-style Email Result */}
         <AnimatePresence mode="wait">
           {result && (
             <motion.div
@@ -211,101 +235,101 @@ export default function Home() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
               transition={{ duration: 0.5 }}
-              className="relative"
+              className="w-full"
             >
-              {/* Success card border */}
-              <div className="absolute -inset-[2px] bg-gradient-to-r from-green-500 via-emerald-400 to-green-500 rounded-3xl opacity-60 blur-sm" />
-              
-              <div className="relative bg-gradient-to-b from-neutral-900 to-neutral-950 rounded-3xl p-6 shadow-[0_20px_50px_-15px_rgba(34,197,94,0.2)]">
+              {/* Netflix Email Card */}
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
                 
-                {/* Header */}
-                <div className="flex items-center justify-between gap-4 flex-wrap mb-6 pb-4 border-b border-neutral-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                      <CheckCircle className="w-5 h-5 text-green-400" />
+                {/* Netflix Header */}
+                <div className="bg-white p-6 border-b border-gray-100">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
+                      <span className="text-primary text-2xl font-bold">N</span>
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-green-400">Email Found</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(result.receivedAt).toLocaleDateString()} at {new Date(result.receivedAt).toLocaleTimeString()}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">Netflix</span>
+                        <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <span className="text-gray-500 text-sm">
+                        {new Date(result.receivedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Email info */}
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-neutral-800/50 border border-neutral-700">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Subject</p>
-                    <p className="text-white font-medium" data-testid="text-email-subject">{result.subject}</p>
-                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
-                      <span><span className="text-neutral-400">From:</span> {result.from}</span>
-                      <span><span className="text-neutral-400">To:</span> {result.to}</span>
+                {/* Email Body */}
+                <div className="p-6 md:p-8">
+                  {/* Netflix Logo */}
+                  <div className="mb-6">
+                    <span className="text-primary text-5xl font-bold">N</span>
+                  </div>
+
+                  {/* Title */}
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6" data-testid="text-email-subject">
+                    {result.subject || "Your temporary access code"}
+                  </h2>
+
+                  {/* Greeting */}
+                  <p className="text-gray-700 mb-4">
+                    Hello,
+                  </p>
+
+                  {/* Message */}
+                  <p className="text-gray-700 mb-4">
+                    We have received a request for a temporary access code from the device below.
+                  </p>
+
+                  <p className="text-gray-700 mb-6">
+                    If it's you or someone who lives under your roof, you can get a temporary access code to watch Netflix.
+                  </p>
+
+                  <p className="text-gray-600 text-sm mb-6">
+                    This code allows you to watch Netflix while traveling or during a temporary stay away from your Netflix home. Do not send this code to anyone else.
+                  </p>
+
+                  {/* Device Info Box */}
+                  <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-200">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Tv className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-sm text-gray-700">
+                        <p className="font-medium text-gray-900 mb-1">Request made from a device on</p>
+                        <p className="text-gray-600">
+                          {new Date(result.receivedAt).toLocaleDateString('en-US', { 
+                            month: 'long', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZoneName: 'short'
+                          })}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Access Code Display */}
-                  {result.accessCode && (
-                    <motion.div 
-                      initial={{ scale: 0.9 }}
-                      animate={{ scale: 1 }}
-                      className="relative overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-orange-500/20 to-primary/20 rounded-2xl" />
-                      <div className="relative flex flex-col items-center justify-center p-8 rounded-2xl border border-primary/30">
-                        <span className="text-xs text-muted-foreground uppercase tracking-widest mb-2">Access Code</span>
-                        <div className="flex items-center gap-4">
-                          <span className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary via-orange-400 to-primary tracking-[0.3em] font-mono" data-testid="text-code-result">
-                            {result.accessCode}
-                          </span>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            className="rounded-xl hover:bg-primary/20"
-                            onClick={() => {
-                              navigator.clipboard.writeText(result.accessCode);
-                              toast({ title: "Copied!", description: "Access code copied to clipboard" });
-                            }}
-                            data-testid="button-copy-code"
-                          >
-                            <Copy className="w-5 h-5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Netflix Links */}
+                  {/* Main CTA Button - Netflix Style */}
                   {result.allLinks && result.allLinks.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Netflix Links</p>
-                      <div className="space-y-2">
-                        {result.allLinks.slice(0, 3).map((link, index) => (
-                          <a 
-                            key={index}
-                            href={link} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all text-sm break-all group"
-                            data-testid={`link-netflix-${index}`}
-                          >
-                            <ExternalLink className="w-4 h-4 flex-shrink-0 group-hover:scale-110 transition-transform" />
-                            <span className="truncate">{link}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
+                    <motion.a
+                      href={getMainLink(result.allLinks)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="block w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 px-6 rounded-lg text-center text-lg transition-all shadow-lg shadow-primary/30"
+                      data-testid="button-retrieve-code"
+                    >
+                      Retrieve the code
+                    </motion.a>
                   )}
 
-                  {/* Email Content */}
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Email Content</p>
-                    <div 
-                      className="p-4 rounded-xl bg-neutral-800/50 border border-neutral-700 text-sm text-neutral-300 leading-relaxed max-h-64 overflow-y-auto whitespace-pre-wrap scrollbar-thin scrollbar-thumb-neutral-600"
-                      data-testid="text-email-content"
-                    >
-                      {result.textContent || "No content available"}
-                    </div>
+                  {/* Expiry Notice */}
+                  <div className="flex items-center gap-2 mt-4 text-gray-500 text-sm">
+                    <Clock className="w-4 h-4" />
+                    <span>* The link expires after 15 minutes.</span>
                   </div>
                 </div>
               </div>
