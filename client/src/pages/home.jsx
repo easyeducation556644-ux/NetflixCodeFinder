@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Search, Mail, CheckCircle, AlertCircle, Loader2, ExternalLink, Copy, FileText, Code } from "lucide-react";
+import DOMPurify from "dompurify";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ const formSchema = z.object({
 export default function Home() {
   const { toast } = useToast();
   const [result, setResult] = useState(null);
+  const [viewMode, setViewMode] = useState("text"); // "text" or "html"
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -32,13 +34,21 @@ export default function Home() {
   const searchMutation = useMutation({
     mutationFn: async (data) => {
       const res = await apiRequest("POST", "/api/findcode", { email: data.email });
-      return await res.json();
+      const json = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(json.error || json.message || "Request failed");
+      }
+      
+      return json;
     },
     onSuccess: (data) => {
       setResult(data);
       toast({
         title: "Email Found",
-        description: "Successfully retrieved the latest access code.",
+        description: data.accessCode 
+          ? `Access code: ${data.accessCode}` 
+          : "Email retrieved successfully.",
       });
     },
     onError: (error) => {
@@ -63,7 +73,7 @@ export default function Home() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="w-full max-w-md space-y-8"
+        className="w-full max-w-2xl space-y-8"
       >
         <div className="text-center space-y-2">
           <h1 className="text-5xl font-bold text-primary drop-shadow-lg tracking-widest">
@@ -135,53 +145,122 @@ export default function Home() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.4 }}
+              className="w-full max-w-2xl"
             >
-              <Card className="border-l-4 border-l-green-500 bg-card/80 backdrop-blur overflow-hidden">
+              <Card className="bg-card/80 backdrop-blur overflow-hidden">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <CardTitle className="text-xl font-sans text-green-500 flex items-center gap-2">
                       <CheckCircle className="w-5 h-5" />
-                      Code Found
+                      Email Found
                     </CardTitle>
                     <span className="text-xs text-muted-foreground font-mono">
-                      {new Date(result.receivedAt).toLocaleTimeString()}
+                      {new Date(result.receivedAt).toLocaleDateString()} {new Date(result.receivedAt).toLocaleTimeString()}
                     </span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="p-3 rounded-md bg-background/50 border border-border space-y-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Subject</p>
-                    <p className="font-medium truncate">{result.subject}</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Content Preview</p>
-                    <div className="p-4 rounded-md bg-secondary/30 border border-border font-mono text-sm leading-relaxed max-h-40 overflow-y-auto">
-                      {result.bodySnippet}
+                  <div className="p-3 rounded-md bg-background/50 border border-border space-y-2">
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Subject</p>
+                      <p className="font-medium" data-testid="text-email-subject">{result.subject}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      <span><span className="font-semibold">From:</span> {result.from}</span>
+                      <span><span className="font-semibold">To:</span> {result.to}</span>
                     </div>
                   </div>
 
                   {result.accessCode && (
-                    <div className="flex flex-col items-center justify-center p-6 bg-background rounded-lg border border-dashed border-primary/30">
+                    <div className="flex flex-col items-center justify-center p-6 bg-primary/10 rounded-lg border border-primary/30">
                       <span className="text-xs text-muted-foreground mb-1">ACCESS CODE</span>
-                      <span className="text-4xl font-bold text-primary tracking-[0.2em]" data-testid="text-code-result">
-                        {result.accessCode}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-4xl font-bold text-primary tracking-[0.2em]" data-testid="text-code-result">
+                          {result.accessCode}
+                        </span>
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          onClick={() => {
+                            navigator.clipboard.writeText(result.accessCode);
+                            toast({ title: "Code Copied", description: "Access code copied to clipboard" });
+                          }}
+                          data-testid="button-copy-code"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   )}
-                  
-                  {result.link && (
-                     <div className="pt-2">
-                       <a 
-                        href={result.link} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300 hover:underline break-all"
-                       >
-                         {result.link}
-                       </a>
-                     </div>
+
+                  {result.allLinks && result.allLinks.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Netflix Links</p>
+                      <div className="space-y-2">
+                        {result.allLinks.map((link, index) => (
+                          <a 
+                            key={index}
+                            href={link} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-2 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-colors text-sm break-all"
+                            data-testid={`link-netflix-${index}`}
+                          >
+                            <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                            {link}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
                   )}
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Full Email Content</p>
+                      <div className="flex gap-1">
+                        <Button 
+                          size="sm" 
+                          variant={viewMode === "text" ? "default" : "ghost"}
+                          onClick={() => setViewMode("text")}
+                          className="h-7 px-2 text-xs"
+                          data-testid="button-view-text"
+                        >
+                          <FileText className="w-3 h-3 mr-1" />
+                          Text
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant={viewMode === "html" ? "default" : "ghost"}
+                          onClick={() => setViewMode("html")}
+                          className="h-7 px-2 text-xs"
+                          data-testid="button-view-html"
+                        >
+                          <Code className="w-3 h-3 mr-1" />
+                          HTML
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {viewMode === "text" ? (
+                      <div 
+                        className="p-4 rounded-md bg-background border border-border text-sm leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap"
+                        data-testid="text-email-content"
+                      >
+                        {result.textContent || "No text content available"}
+                      </div>
+                    ) : (
+                      <div 
+                        className="p-4 rounded-md bg-white text-black text-sm leading-relaxed max-h-96 overflow-y-auto"
+                        dangerouslySetInnerHTML={{ 
+                          __html: DOMPurify.sanitize(result.htmlContent || "<p>No HTML content available</p>", {
+                            ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'a', 'span', 'div', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'hr'],
+                            ALLOWED_ATTR: ['href', 'target', 'rel', 'style', 'class', 'src', 'alt', 'width', 'height']
+                          })
+                        }}
+                        data-testid="html-email-content"
+                      />
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
