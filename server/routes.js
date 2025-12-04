@@ -1,57 +1,5 @@
 import Imap from "imap";
 import { simpleParser } from "mailparser";
-import translatte from "translatte";
-
-async function translateToEnglish(text) {
-  if (!text || text.trim() === "") return text;
-  
-  try {
-    const result = await translatte(text, { to: "en" });
-    return result.text;
-  } catch (error) {
-    return text;
-  }
-}
-
-function extractCleanText(html) {
-  if (!html) return "";
-  
-  let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-  
-  text = text.replace(/<br\s*\/?>/gi, "\n");
-  text = text.replace(/<\/p>/gi, "\n\n");
-  text = text.replace(/<\/div>/gi, "\n");
-  text = text.replace(/<\/tr>/gi, "\n");
-  text = text.replace(/<\/li>/gi, "\n");
-  text = text.replace(/<\/h[1-6]>/gi, "\n\n");
-  
-  text = text.replace(/<[^>]+>/g, " ");
-  
-  text = text.replace(/&nbsp;/gi, " ");
-  text = text.replace(/&amp;/gi, "&");
-  text = text.replace(/&lt;/gi, "<");
-  text = text.replace(/&gt;/gi, ">");
-  text = text.replace(/&quot;/gi, '"');
-  text = text.replace(/&#39;/gi, "'");
-  text = text.replace(/&copy;/gi, "");
-  text = text.replace(/&reg;/gi, "");
-  text = text.replace(/&#\d+;/gi, "");
-  
-  text = text.replace(/[ \t]+/g, " ");
-  text = text.replace(/\n\s*\n\s*\n/g, "\n\n");
-  text = text.trim();
-  
-  const lines = text.split("\n").filter(line => {
-    const trimmed = line.trim();
-    if (!trimmed) return false;
-    if (trimmed.match(/^https?:\/\/[^\s]+$/)) return false;
-    if (trimmed.length < 3) return false;
-    return true;
-  });
-  
-  return lines.join("\n").trim();
-}
 
 function getUserFriendlyError(error) {
   const errorMessage = error.message || error.toString();
@@ -100,19 +48,12 @@ export async function registerRoutes(httpServer, app) {
     }
 
     try {
-      const result = await searchNetflixEmail(imapConfig, email);
-      if (result) {
-        const translatedSubject = await translateToEnglish(result.subject);
-        const translatedContent = await translateToEnglish(result.textContent);
-        
-        res.json({
-          ...result,
-          subject: translatedSubject,
-          textContent: translatedContent
-        });
+      const results = await searchNetflixEmails(imapConfig, email);
+      if (results && results.length > 0) {
+        res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address. Please make sure the email exists in the inbox." 
+          error: "No Netflix email found for this address in the last 16 minutes." 
         });
       }
     } catch (error) {
@@ -125,7 +66,7 @@ export async function registerRoutes(httpServer, app) {
   return httpServer;
 }
 
-function searchNetflixEmail(imapConfig, userEmail) {
+function searchNetflixEmails(imapConfig, userEmail) {
   return new Promise((resolve, reject) => {
     const imap = new Imap(imapConfig);
 
@@ -144,7 +85,7 @@ function searchNetflixEmail(imapConfig, userEmail) {
 
           if (!results || results.length === 0) {
             imap.end();
-            return resolve(null);
+            return resolve([]);
           }
 
           const latestEmails = results.slice(-200);
@@ -183,6 +124,7 @@ function searchNetflixEmail(imapConfig, userEmail) {
               const emails = await Promise.all(emailPromises);
               
               const userEmailLower = userEmail.toLowerCase().trim();
+              const sixteenMinutesAgo = new Date(Date.now() - 16 * 60 * 1000);
               
               const userEmails = emails
                 .filter((email) => email !== null)
@@ -219,42 +161,30 @@ function searchNetflixEmail(imapConfig, userEmail) {
                 return isFromNetflix || hasNetflixInSubject || hasNetflixContent;
               });
 
-              const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
-              const latestNetflixEmail = sortedEmails[0];
+              const recentEmails = netflixEmails.filter((email) => {
+                const emailDate = new Date(email.date);
+                return emailDate >= sixteenMinutesAgo;
+              });
+
+              const sortedEmails = recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
 
               imap.end();
 
-              if (!latestNetflixEmail) {
-                return resolve(null);
-              }
-
-              const textContent = latestNetflixEmail.text || "";
-              const htmlContent = latestNetflixEmail.html || "";
-              const combinedContent = textContent + " " + htmlContent;
-
-              const codeMatch = combinedContent.match(/\b(\d{4})\b/);
-              const accessCode = codeMatch ? codeMatch[1] : null;
-
-              const linkMatches = combinedContent.match(
-                /https?:\/\/[^\s<>"']+netflix[^\s<>"']*/gi
-              ) || [];
-              const links = [...new Set(linkMatches.map(l => l.replace(/['">\]]+$/, "")))];
-              const link = links[0] || null;
-
-              const cleanText = extractCleanText(htmlContent) || textContent;
-              
-              resolve({
-                subject: latestNetflixEmail.subject,
-                receivedAt: latestNetflixEmail.date ? latestNetflixEmail.date.toISOString() : new Date().toISOString(),
-                from: latestNetflixEmail.from?.text || "",
-                to: latestNetflixEmail.to?.text || "",
-                textContent: cleanText,
-                htmlContent: htmlContent,
-                accessCode,
-                link,
-                allLinks: links,
-                totalNetflixEmails: netflixEmails.length,
+              const formattedEmails = sortedEmails.map((email) => {
+                const htmlContent = email.html || "";
+                
+                return {
+                  id: email.messageId || `${Date.now()}-${Math.random()}`,
+                  subject: email.subject || "Netflix Email",
+                  receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
+                  from: email.from?.text || "",
+                  to: email.to?.text || "",
+                  htmlContent: htmlContent,
+                  textContent: email.text || "",
+                };
               });
+
+              resolve(formattedEmails);
             } catch (parseError) {
               imap.end();
               reject(parseError);
