@@ -300,6 +300,86 @@ function extractAccessCode(content) {
   return null;
 }
 
+function isHouseholdEmail(email) {
+  const subject = (email.subject || "").toLowerCase();
+  const textContent = (email.text || "").toLowerCase();
+  const htmlContent = (email.html || "").toLowerCase();
+  const combinedContent = subject + " " + textContent + " " + htmlContent;
+  
+  const householdKeywords = [
+    'household',
+    'temporary access',
+    'temporary code',
+    'travel',
+    'traveling',
+    'away from home',
+    'get code',
+    'getcode',
+    'get-code',
+    'access code',
+    'someone is using',
+    'someone else',
+    'update your household',
+    'add to household',
+    'your household',
+    'sign in somewhere',
+    'signed in somewhere',
+    'new device',
+    'new sign-in',
+    'new signin',
+    'yesitwasme',
+    'yes-it-was-me',
+    'notme',
+    'not-me',
+    'wasn\'t me',
+    'was it you',
+    'temporary member',
+    'account access',
+    'accountaccess',
+    'verify your identity',
+    'confirm it was you',
+    'confirm this was you',
+    'different location',
+    'unusual sign-in',
+    'unusual signin',
+  ];
+  
+  const excludeKeywords = [
+    'password reset',
+    'reset your password',
+    'change your password',
+    'forgot password',
+    'password changed',
+    'password updated',
+    'payment',
+    'billing',
+    'subscription',
+    'renewal',
+    'plan change',
+    'profile',
+    'what to watch',
+    'new on netflix',
+    'coming soon',
+    'recommendation',
+    'top picks',
+    'newsletter',
+  ];
+  
+  for (const exclude of excludeKeywords) {
+    if (combinedContent.includes(exclude)) {
+      return false;
+    }
+  }
+  
+  for (const keyword of householdKeywords) {
+    if (combinedContent.includes(keyword)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function getUserFriendlyError(error) {
   const errorMessage = error.message || error.toString();
   
@@ -444,7 +524,8 @@ function searchNetflixEmails(imapConfig, userEmail) {
                     textContent.includes(userEmailLower) ||
                     htmlContent.includes(userEmailLower)
                   );
-                });
+                })
+                .filter((email) => isHouseholdEmail(email));
 
               const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
               
