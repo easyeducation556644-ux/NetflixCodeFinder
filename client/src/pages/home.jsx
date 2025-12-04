@@ -103,7 +103,7 @@ function EmailContent({ email, emailId }) {
       data-testid={`email-content-${emailId}`}
     >
       <div 
-        className="email-content-wrapper rounded-xl overflow-hidden"
+        className="email-content-wrapper rounded-xl overflow-hidden bg-white"
         dangerouslySetInnerHTML={{ __html: rawHtml || "" }}
       />
     </div>

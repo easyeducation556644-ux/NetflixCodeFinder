@@ -125,140 +125,103 @@ function escapeHtml(text) {
 async function translateHtmlContent(html) {
   if (!html || html.trim() === "") return html;
   
-  // Step 1: Remove all dangerous elements completely
+  // Step 1: Remove dangerous elements but keep the original email structure
   let processedHtml = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
     .replace(/<\?xml[^>]*\?>/gi, '')
     .replace(/<!DOCTYPE[^>]*>/gi, '');
   
-  // Step 2: Extract all links with their content for CTA buttons
-  const links = [];
-  processedHtml = processedHtml.replace(/<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (match, url, content) => {
-    const urlClean = url.replace(/&amp;/g, '&');
-    const safeUrl = sanitizeUrl(urlClean);
-    const textContent = content.replace(/<[^>]+>/g, '').trim();
-    
-    if (safeUrl && textContent) {
-      const urlLower = urlClean.toLowerCase();
-      // Check if this is a main action button
-      const isMainAction = urlLower.includes('yesitwasme') || 
-                           urlLower.includes('yes-it-was-me') ||
-                           urlLower.includes('yes_it_was_me') ||
-                           urlLower.includes('getcode') || 
-                           urlLower.includes('get-code') ||
-                           urlLower.includes('get_code') ||
-                           urlLower.includes('travel') ||
-                           urlLower.includes('temporary-access') ||
-                           urlLower.includes('signout') ||
-                           urlLower.includes('sign-out') ||
-                           urlLower.includes('unknown');
-      
-      const placeholder = `___LINK_${links.length}___`;
-      links.push({ placeholder, url: safeUrl, text: textContent, isMainAction });
-      return placeholder;
-    }
-    return textContent || '';
-  });
-  
-  // Step 3: Strip all remaining HTML tags and clean up text
-  let textContent = processedHtml
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<\/td>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/&#\d+;/gi, '')
-    .replace(/&shy;/gi, '')
-    .replace(/\u00AD/g, '')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n\s*\n/g, '\n\n')
-    .trim();
-  
-  // Step 4: Remove footer content
+  // Step 2: Remove footer content from the HTML
   const footerPatterns = [
-    /we're here to help[\s\S]*/i,
-    /visit the help center[\s\S]*/i,
-    /the netflix team[\s\S]*/i,
-    /this message was sent to[\s\S]*/i,
-    /this message was mailed to[\s\S]*/i,
-    /netflix international[\s\S]*/i,
-    /need help\?[\s\S]*/i,
-    /questions\?[\s\S]*/i,
-    /do you have any questions[\s\S]*/i,
+    /<[^>]*>[\s\S]*?we're here to help[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?visit the help center[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?the netflix team[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?this message was sent to[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?this message was mailed to[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?netflix international[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?need help\?[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?questions\? visit[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?do you have any questions[\s\S]*$/i,
   ];
   
   for (const pattern of footerPatterns) {
-    textContent = textContent.replace(pattern, '');
+    processedHtml = processedHtml.replace(pattern, '');
   }
-  textContent = textContent.trim();
   
-  // Step 5: Translate the text content
-  let translatedContent = textContent;
-  try {
-    if (textContent.length > 0 && textContent.length < 10000) {
-      translatedContent = await translateToEnglish(textContent);
+  // Step 3: Extract text content for translation while preserving structure
+  const textToTranslate = [];
+  let textIndex = 0;
+  
+  // Replace text content with placeholders for translation
+  processedHtml = processedHtml.replace(/>([^<]+)</g, (match, text) => {
+    const trimmedText = text.trim();
+    if (trimmedText && trimmedText.length > 1 && !/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"&nbsp;]+$/.test(trimmedText)) {
+      const placeholder = `>___TEXT_${textIndex}___<`;
+      textToTranslate.push({ index: textIndex, text: trimmedText });
+      textIndex++;
+      return placeholder;
     }
-  } catch (e) {
-    // Keep original on error
-  }
+    return match;
+  });
   
-  // Step 6: Translate and restore links
-  for (const link of links) {
-    let translatedText = link.text;
+  // Step 4: Translate all text content
+  for (const item of textToTranslate) {
     try {
-      translatedText = await translateToEnglish(link.text);
+      const translated = await translateToEnglish(item.text);
+      item.translated = translated;
     } catch (e) {
-      // Keep original on error
-    }
-    
-    // Build the button/link HTML with Netflix styling
-    const safeUrl = escapeHtml(link.url);
-    const safeText = escapeHtml(translatedText);
-    
-    let buttonHtml;
-    if (link.isMainAction) {
-      // Main action buttons with Netflix red background and white text
-      buttonHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 600; margin: 8px 4px;">${safeText}</a>`;
-    } else {
-      // Secondary links with Netflix style (red border, no fill)
-      buttonHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; border: 2px solid #E50914; color: #E50914; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: 500; margin: 8px 4px;">${safeText}</a>`;
-    }
-    
-    translatedContent = translatedContent.replace(link.placeholder, buttonHtml);
-  }
-  
-  // Step 7: Format content as Netflix-styled HTML with dark theme
-  const paragraphs = translatedContent
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => p && p.length > 0 && !p.match(/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"]+$/));
-  
-  let formattedHtml = '<div style="background-color: #141414; color: #ffffff; padding: 24px; font-family: \'Netflix Sans\', \'Helvetica Neue\', Helvetica, Arial, sans-serif; border-radius: 4px;">';
-  
-  for (const para of paragraphs) {
-    // Check if paragraph contains a button link
-    if (para.includes('<a href=')) {
-      formattedHtml += `<div style="text-align: center; margin: 24px 0;">${para}</div>`;
-    } else {
-      // Regular paragraph - escape to prevent XSS
-      const safePara = escapeHtml(para);
-      formattedHtml += `<p style="margin-bottom: 16px; line-height: 1.6; color: #e5e5e5;">${safePara}</p>`;
+      item.translated = item.text;
     }
   }
   
-  formattedHtml += '</div>';
+  // Step 5: Replace placeholders with translated text
+  for (const item of textToTranslate) {
+    processedHtml = processedHtml.replace(`>___TEXT_${item.index}___<`, `>${escapeHtml(item.translated)}<`);
+  }
   
-  return formattedHtml;
+  // Step 6: Process links - only add white text color to main action buttons (Yes Its Me, Get Code)
+  processedHtml = processedHtml.replace(/<a([^>]*href\s*=\s*["']([^"']+)["'][^>]*)>/gi, (match, attrs, url) => {
+    const urlClean = url.replace(/&amp;/g, '&').toLowerCase();
+    const safeUrl = sanitizeUrl(url.replace(/&amp;/g, '&'));
+    
+    if (!safeUrl) {
+      return match;
+    }
+    
+    // Check if this is a main action button (Yes Its Me or Get Code)
+    const isYesItsMe = urlClean.includes('yesitwasme') || 
+                       urlClean.includes('yes-it-was-me') ||
+                       urlClean.includes('yes_it_was_me');
+    
+    const isGetCode = urlClean.includes('getcode') || 
+                      urlClean.includes('get-code') ||
+                      urlClean.includes('get_code') ||
+                      urlClean.includes('travel') ||
+                      urlClean.includes('temporary-access') ||
+                      (urlClean.includes('/account') && !urlClean.includes('signout'));
+    
+    // Only add white color to Yes Its Me and Get Code buttons
+    if (isYesItsMe || isGetCode) {
+      // Add white text color and ensure button is clickable
+      let newAttrs = attrs;
+      if (attrs.includes('style=')) {
+        newAttrs = attrs.replace(/style\s*=\s*["']([^"']*)["']/i, (m, styles) => {
+          // Add white color to existing styles
+          return `style="${styles}; color: #ffffff !important;"`;
+        });
+      } else {
+        newAttrs = attrs + ' style="color: #ffffff !important;"';
+      }
+      return `<a${newAttrs} target="_blank" rel="noopener noreferrer">`;
+    }
+    
+    return `<a${attrs} target="_blank" rel="noopener noreferrer">`;
+  });
+  
+  // Step 7: Wrap in a container that preserves original styling (no dark background)
+  const wrappedHtml = `<div class="netflix-email-original" style="font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;">${processedHtml}</div>`;
+  
+  return wrappedHtml;
 }
 
 function getLinkLabel(url) {

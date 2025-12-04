@@ -55,72 +55,45 @@
   max-width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  background-color: #1a1a1a !important;
-  color: #e5e5e5 !important;
-  padding: 20px;
   font-size: 15px;
   line-height: 1.7;
 }
 
-.email-content-wrapper p {
-  margin-bottom: 16px;
-  color: #e5e5e5 !important;
-  line-height: 1.7;
+.email-content-wrapper img {
+  max-width: 100%;
+  height: auto;
 }
 
-.email-content-wrapper div {
-  color: #e5e5e5 !important;
+.email-content-wrapper table {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+.email-content-wrapper td {
+  word-break: break-word;
 }
 
 .email-content-wrapper a {
-  display: inline-block;
-  background-color: #E50914 !important;
-  color: white !important;
-  padding: 12px 24px;
   text-decoration: none !important;
-  border-radius: 4px;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .email-content-wrapper a:hover {
-  background-color: #b8070f !important;
-  color: white !important;
-}
-
-.email-content-wrapper h1,
-.email-content-wrapper h2,
-.email-content-wrapper h3 {
-  color: #ffffff !important;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
-.email-content-wrapper h1 {
-  font-size: 24px;
-}
-
-.email-content-wrapper h2 {
-  font-size: 20px;
-}
-
-.email-content-wrapper h3 {
-  font-size: 18px;
+  opacity: 0.9;
 }
 
 @media (max-width: 640px) {
   .email-content-wrapper {
     font-size: 14px;
     line-height: 1.6;
-    padding: 16px;
   }
   
-  .email-content-wrapper p {
-    margin-bottom: 12px !important;
+  .email-content-wrapper table {
+    width: 100% !important;
   }
   
-  .email-content-wrapper a {
-    padding: 10px 20px;
-    font-size: 14px;
+  .email-content-wrapper td {
+    display: block !important;
+    width: 100% !important;
   }
 }
