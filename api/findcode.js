@@ -31,9 +31,9 @@ function getLinkLabel(url) {
   } else if (urlLower.includes("loginhelp") || urlLower.includes("login-help")) {
     return "Login Help";
   } else if (urlLower.includes("/account")) {
-    return "Go to Account";
+    return "Get Code";
   }
-  return "Open Link";
+  return "Get Code";
 }
 
 function categorizeLinkType(url) {
