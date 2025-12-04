@@ -302,85 +302,64 @@ function extractAccessCode(content) {
   return null;
 }
 
-function isHouseholdEmail(email) {
-  const htmlContent = (email.html || "").toLowerCase();
+function normalizeText(text) {
+  return (text || "")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
+function isHouseholdEmailByContent(translatedText) {
+  const content = normalizeText(translatedText);
   
-  const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
-  const urls = [];
-  let match;
-  
-  while ((match = hrefRegex.exec(htmlContent)) !== null) {
-    urls.push(match[1].toLowerCase());
-  }
-  
-  const householdUrlPatterns = [
-    /travel/i,
-    /temporary/i,
-    /getcode/i,
-    /get-code/i,
-    /get_code/i,
-    /household/i,
-    /yesitwasme/i,
-    /yes-it-was-me/i,
-    /yes_it_was_me/i,
-    /notme/i,
-    /not-me/i,
-    /not_me/i,
-    /wasntme/i,
-    /accountaccess/i,
-    /account\/travel/i,
+  const excludePatterns = [
+    /\bpassword\b/i,
+    /\breset\b/i,
+    /\bnew\s*device\b/i,
+    /\bsomeone\s*(is\s*)?(using|else)\b/i,
+    /\bchange\s*(your\s*)?password\b/i,
+    /\bprotect\s*(your\s*)?account\b/i,
+    /\bsigned?\s*in\b/i,
+    /\bverify\b/i,
+    /\bconfirm\b/i,
+    /\bpayment\b/i,
+    /\bbilling\b/i,
+    /\bsubscription\b/i,
+    /\brenewal\b/i,
+    /\bprofile\b/i,
+    /\bnewsletter\b/i,
+    /\bwhat\s*to\s*watch\b/i,
+    /\brecommendation\b/i,
   ];
   
-  const excludeUrlPatterns = [
-    /password/i,
-    /reset/i,
-    /loginhelp/i,
-    /login-help/i,
-    /signin/i,
-    /sign-in/i,
-    /device/i,
-    /signout/i,
-    /sign-out/i,
-    /manage/i,
-    /\/account(?!\/travel)/i,
-    /verify/i,
-    /confirm/i,
+  for (const pattern of excludePatterns) {
+    if (pattern.test(content)) {
+      return false;
+    }
+  }
+  
+  const householdPatterns = [
+    /\bhousehold\b/i,
+    /\btemporary\s*access\b/i,
+    /\btemporary\s*code\b/i,
+    /\btravel\b/i,
+    /\btraveling\b/i,
+    /\baway\s*from\s*home\b/i,
+    /\bget\s*code\b/i,
+    /\baccess\s*code\b/i,
+    /\btemporary\s*member\b/i,
+    /\byes[,]?\s*it\s*was\s*me\b/i,
+    /\bnot\s*me\b/i,
+    /\bwasn'?t\s*me\b/i,
   ];
   
-  let hasHouseholdUrl = false;
-  let hasExcludeUrl = false;
-  
-  for (const url of urls) {
-    if (!url.includes('netflix') && !url.includes('nflx')) continue;
-    
-    if (url.includes('unsubscribe') || url.includes('help.netflix') || 
-        url.includes('privacy') || url.includes('terms') || url.includes('legal')) {
-      continue;
+  for (const pattern of householdPatterns) {
+    if (pattern.test(content)) {
+      return true;
     }
-    
-    for (const pattern of householdUrlPatterns) {
-      if (pattern.test(url)) {
-        hasHouseholdUrl = true;
-        break;
-      }
-    }
-    
-    if (!hasHouseholdUrl) {
-      for (const pattern of excludeUrlPatterns) {
-        if (pattern.test(url)) {
-          hasExcludeUrl = true;
-          break;
-        }
-      }
-    }
-  }
-  
-  if (hasHouseholdUrl) {
-    return true;
-  }
-  
-  if (hasExcludeUrl) {
-    return false;
   }
   
   return false;
@@ -510,7 +489,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               const userEmailLower = userEmail.toLowerCase().trim();
               
-              const netflixEmails = emails
+              const basicFilteredEmails = emails
                 .filter((email) => email !== null)
                 .filter((email) => {
                   const fromAddress = (email.from?.text || "").toLowerCase();
@@ -530,36 +509,52 @@ function searchNetflixEmails(imapConfig, userEmail) {
                     textContent.includes(userEmailLower) ||
                     htmlContent.includes(userEmailLower)
                   );
-                })
-                .filter((email) => isHouseholdEmail(email));
+                });
 
-              const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
-              
-              const latestEmail = sortedEmails.length > 0 ? [sortedEmails[0]] : [];
+              const sortedEmails = basicFilteredEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
 
               imap.end();
 
-              const formattedEmails = await Promise.all(latestEmail.map(async (email) => {
-                const htmlContent = email.html || "";
+              let householdEmail = null;
+              
+              for (const email of sortedEmails) {
+                const subject = email.subject || "";
                 const textContent = email.text || "";
-                const combinedContent = textContent + " " + htmlContent;
+                const htmlContent = email.html || "";
+                const combinedRaw = subject + " " + textContent + " " + htmlContent;
                 
-                const translatedSubject = await translateToEnglish(email.subject || "Email");
-                const contentSegments = await processContentWithLinks(htmlContent, textContent);
-                const accessCode = extractAccessCode(combinedContent);
+                const translatedContent = await translateToEnglish(combinedRaw);
                 
-                return {
-                  id: email.messageId || `${Date.now()}-${Math.random()}`,
-                  subject: translatedSubject,
-                  receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
-                  from: email.from?.text || "",
-                  to: email.to?.text || "",
-                  contentSegments: contentSegments,
-                  accessCode: accessCode,
-                };
-              }));
+                if (isHouseholdEmailByContent(translatedContent)) {
+                  householdEmail = email;
+                  break;
+                }
+              }
 
-              resolve(formattedEmails);
+              if (!householdEmail) {
+                resolve([]);
+                return;
+              }
+
+              const htmlContent = householdEmail.html || "";
+              const textContent = householdEmail.text || "";
+              const combinedContent = textContent + " " + htmlContent;
+              
+              const translatedSubject = await translateToEnglish(householdEmail.subject || "Email");
+              const contentSegments = await processContentWithLinks(htmlContent, textContent);
+              const accessCode = extractAccessCode(combinedContent);
+              
+              const formattedEmail = {
+                id: householdEmail.messageId || `${Date.now()}-${Math.random()}`,
+                subject: translatedSubject,
+                receivedAt: householdEmail.date ? householdEmail.date.toISOString() : new Date().toISOString(),
+                from: householdEmail.from?.text || "",
+                to: householdEmail.to?.text || "",
+                contentSegments: contentSegments,
+                accessCode: accessCode,
+              };
+
+              resolve([formattedEmail]);
             } catch (parseError) {
               imap.end();
               reject(parseError);
