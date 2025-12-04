@@ -95,14 +95,17 @@ function ContentSegments({ segments, emailId }) {
 }
 
 function EmailContent({ email, emailId }) {
-  const { contentSegments } = email;
+  const { rawHtml, contentSegments } = email;
   
   return (
     <div 
-      className="w-full bg-neutral-800 rounded-xl p-4 sm:p-6"
+      className="w-full"
       data-testid={`email-content-${emailId}`}
     >
-      <ContentSegments segments={contentSegments} emailId={emailId} />
+      <div 
+        className="email-content-wrapper rounded-xl overflow-hidden"
+        dangerouslySetInnerHTML={{ __html: rawHtml || "" }}
+      />
     </div>
   );
 }

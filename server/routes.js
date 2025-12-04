@@ -526,14 +526,36 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 const textOnly = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
                 if (textOnly.length > 0 && textOnly.length < 5000) {
                   const translatedText = await translateToEnglish(textOnly);
-                  translatedHtml = `<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; padding: 16px; background-color: #262626; color: #f5f5f5;">
-                    <div style="text-align: center; margin-bottom: 16px;">
-                      <span style="color: #E50914; font-size: 36px; font-weight: bold;">N</span>
-                    </div>
-                    <div style="font-size: 14px; line-height: 1.6; color: #f5f5f5;">
-                      ${translatedText.split('\n').map(p => p.trim() ? `<p style="margin-bottom: 12px; color: #f5f5f5;">${p}</p>` : '').join('')}
-                    </div>
-                  </div>`;
+                  const paragraphs = translatedText.split(/\n+/).filter(p => p.trim());
+                  
+                  let mainButton = '';
+                  for (const seg of contentSegments) {
+                    if (seg.type === 'buttons' && seg.buttons) {
+                      for (const btn of seg.buttons) {
+                        if (btn.category === 'yesItWasMe' || btn.category === 'notMe') {
+                          mainButton = `
+                            <div style="text-align: center; margin: 24px 0;">
+                              <a href="${btn.url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 14px 32px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
+                                ${btn.label}
+                              </a>
+                            </div>`;
+                          break;
+                        }
+                      }
+                    }
+                    if (mainButton) break;
+                  }
+                  
+                  translatedHtml = `
+                    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; background-color: #1a1a1a; color: #e5e5e5; padding: 0;">
+                      <div style="text-align: center; padding: 24px 0; border-bottom: 1px solid #333;">
+                        <span style="color: #E50914; font-size: 42px; font-weight: bold;">NETFLIX</span>
+                      </div>
+                      <div style="padding: 24px 20px;">
+                        ${paragraphs.map(p => `<p style="margin: 0 0 16px 0; color: #e5e5e5; font-size: 15px; line-height: 1.6;">${p}</p>`).join('')}
+                        ${mainButton}
+                      </div>
+                    </div>`;
                 }
               } catch (e) {
                 console.log("Translation error:", e);
