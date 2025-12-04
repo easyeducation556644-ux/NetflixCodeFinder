@@ -13,7 +13,7 @@
   --color-popover: hsl(0 0% 12%);
   --color-popover-foreground: hsl(0 0% 95%);
 
-  --color-primary: hsl(357 92% 47%); /* Netflix Red #E50914 */
+  --color-primary: hsl(0 70% 40%); /* Subdued dark red */
   --color-primary-foreground: hsl(0 0% 100%);
 
   --color-secondary: hsl(0 0% 20%);

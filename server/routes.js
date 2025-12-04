@@ -197,6 +197,10 @@ async function processContentWithLinks(html, text) {
     processedHtml = processedHtml.replace(/<\/div>/gi, "\n");
     processedHtml = processedHtml.replace(/<\/tr>/gi, "\n");
     processedHtml = processedHtml.replace(/<[^>]+>/g, " ");
+    processedHtml = processedHtml.replace(/&shy;/gi, "");
+    processedHtml = processedHtml.replace(/\u00AD/g, "");
+    processedHtml = processedHtml.replace(/&#173;/gi, "");
+    processedHtml = processedHtml.replace(/&#x00AD;/gi, "");
     processedHtml = processedHtml.replace(/&nbsp;/gi, " ");
     processedHtml = processedHtml.replace(/&amp;/gi, "&");
     processedHtml = processedHtml.replace(/&lt;/gi, "<");
