@@ -13,6 +13,79 @@ async function translateToEnglish(text) {
   }
 }
 
+function extractLinks(html, text) {
+  const links = [];
+  
+  if (html) {
+    const anchorRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+    let match;
+    while ((match = anchorRegex.exec(html)) !== null) {
+      const url = match[1];
+      let label = match[2].trim();
+      
+      if (!label) {
+        if (url.includes("netflix.com/account")) {
+          label = "Go to Account";
+        } else if (url.includes("netflix.com")) {
+          label = "Open Netflix";
+        } else {
+          label = "Open Link";
+        }
+      }
+      
+      if (url && url.startsWith("http") && !url.includes("unsubscribe") && !url.includes("mailto:")) {
+        links.push({ url, label });
+      }
+    }
+  }
+  
+  if (links.length === 0) {
+    const urlRegex = /https?:\/\/[^\s<>"']+/gi;
+    const content = html || text || "";
+    const matches = content.match(urlRegex) || [];
+    
+    matches.forEach(url => {
+      const cleanUrl = url.replace(/['">\]]+$/, "");
+      if (!cleanUrl.includes("unsubscribe") && !cleanUrl.includes("mailto:")) {
+        let label = "Open Link";
+        if (cleanUrl.includes("netflix.com/account")) {
+          label = "Go to Account";
+        } else if (cleanUrl.includes("netflix.com")) {
+          label = "Open Netflix";
+        }
+        links.push({ url: cleanUrl, label });
+      }
+    });
+  }
+  
+  const uniqueLinks = [];
+  const seenUrls = new Set();
+  for (const link of links) {
+    if (!seenUrls.has(link.url)) {
+      seenUrls.add(link.url);
+      uniqueLinks.push(link);
+    }
+  }
+  
+  return uniqueLinks.slice(0, 5);
+}
+
+function extractAccessCode(content) {
+  const codePatterns = [
+    /\b(\d{4})\b/,
+    /code[:\s]+(\d{4})/i,
+    /verification[:\s]+(\d{4})/i,
+  ];
+  
+  for (const pattern of codePatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
 function getUserFriendlyError(error) {
   const errorMessage = error.message || error.toString();
   
@@ -170,9 +243,12 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const formattedEmails = await Promise.all(sortedEmails.map(async (email) => {
                 const htmlContent = email.html || "";
                 const textContent = email.text || "";
+                const combinedContent = textContent + " " + htmlContent;
                 
                 const translatedSubject = await translateToEnglish(email.subject || "Email");
-                const translatedText = await translateToEnglish(textContent);
+                
+                const links = extractLinks(htmlContent, textContent);
+                const accessCode = extractAccessCode(combinedContent);
                 
                 return {
                   id: email.messageId || `${Date.now()}-${Math.random()}`,
@@ -180,8 +256,8 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
                   from: email.from?.text || "",
                   to: email.to?.text || "",
-                  htmlContent: htmlContent,
-                  textContent: translatedText,
+                  links: links,
+                  accessCode: accessCode,
                 };
               }));
 

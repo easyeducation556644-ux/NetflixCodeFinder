@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { Search, Mail, AlertCircle, Loader2, ExternalLink, Key } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,13 +15,54 @@ const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
 });
 
-function EmailContent({ textContent, emailId }) {
+function EmailLinks({ links, accessCode, emailId }) {
+  if ((!links || links.length === 0) && !accessCode) {
+    return (
+      <div 
+        className="w-full bg-neutral-900 rounded-lg p-4 text-neutral-500 text-sm text-center"
+        data-testid={`content-email-${emailId}`}
+      >
+        No links found in this email
+      </div>
+    );
+  }
+
   return (
     <div 
-      className="w-full bg-neutral-900 rounded-lg p-4 text-neutral-200 text-sm leading-relaxed whitespace-pre-wrap"
+      className="w-full space-y-3"
       data-testid={`content-email-${emailId}`}
     >
-      {textContent || "No content available"}
+      {accessCode && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 flex items-center justify-center gap-3">
+          <Key className="w-5 h-5 text-primary" />
+          <div className="text-center">
+            <p className="text-neutral-400 text-xs mb-1">Access Code</p>
+            <p className="text-3xl font-bold text-white tracking-widest" data-testid={`code-${emailId}`}>
+              {accessCode}
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {links && links.length > 0 && (
+        <div className="space-y-2">
+          {links.map((link, index) => (
+            <a
+              key={index}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-3 bg-neutral-800 hover:bg-neutral-700 transition-colors rounded-lg p-3 group"
+              data-testid={`link-${emailId}-${index}`}
+            >
+              <span className="text-white text-sm font-medium truncate">
+                {link.label}
+              </span>
+              <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-primary flex-shrink-0 transition-colors" />
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -197,8 +238,9 @@ export default function Home() {
                   </div>
 
                   <div className="p-3">
-                    <EmailContent 
-                      textContent={email.textContent} 
+                    <EmailLinks 
+                      links={email.links} 
+                      accessCode={email.accessCode}
                       emailId={email.id || index}
                     />
                   </div>
