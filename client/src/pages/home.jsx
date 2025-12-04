@@ -4,8 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, AlertCircle, Loader2 } from "lucide-react";
-import DOMPurify from "dompurify";
+import { Search, Mail, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -122,57 +121,14 @@ function ContentSegments({ segments, emailId }) {
 }
 
 function EmailContent({ email, emailId }) {
-  const { rawHtml, contentSegments } = email;
-  
-  const sanitizedHtml = DOMPurify.sanitize(rawHtml || "", {
-    ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'a', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'img', 'ul', 'ol', 'li', 'hr', 'style'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'style', 'class', 'width', 'height'],
-  });
+  const { contentSegments } = email;
   
   return (
     <div 
-      className="w-full"
+      className="w-full bg-neutral-800 rounded-xl p-4 sm:p-6"
       data-testid={`email-content-${emailId}`}
     >
-      <div 
-        className="email-content-wrapper bg-neutral-800 text-neutral-100 rounded-xl overflow-hidden p-2 sm:p-4 md:p-6"
-        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-      />
-      {contentSegments && contentSegments.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-3 justify-center">
-          {contentSegments.map((segment, index) => {
-            if (segment.type === "buttons" && segment.buttons) {
-              return segment.buttons.map((btn, btnIndex) => (
-                <a
-                  key={`${index}-${btnIndex}`}
-                  href={btn.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-semibold text-sm sm:text-base rounded-full shadow-lg transition-all duration-200 hover:scale-105"
-                  data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
-                >
-                  {btn.label}
-                </a>
-              ));
-            }
-            if (segment.type === "link" && segment.isMain) {
-              return (
-                <a
-                  key={index}
-                  href={segment.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-semibold text-sm sm:text-base rounded-full shadow-lg transition-all duration-200 hover:scale-105"
-                  data-testid={`button-main-${emailId}-${index}`}
-                >
-                  {segment.label}
-                </a>
-              );
-            }
-            return null;
-          })}
-        </div>
-      )}
+      <ContentSegments segments={contentSegments} emailId={emailId} />
     </div>
   );
 }

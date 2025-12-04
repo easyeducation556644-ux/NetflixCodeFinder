@@ -6,9 +6,12 @@ async function translateToEnglish(text) {
   if (!text || text.trim() === "") return text;
   
   try {
+    console.log("Translating text (length:", text.length, ")");
     const result = await translatte(text, { to: "en" });
+    console.log("Translation result:", result.text ? result.text.substring(0, 100) + "..." : "empty");
     return result.text;
   } catch (error) {
+    console.error("Translation error:", error.message);
     return text;
   }
 }
