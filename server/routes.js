@@ -302,70 +302,78 @@ function extractAccessCode(content) {
   return null;
 }
 
+function normalizeContent(text) {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
 function isHouseholdEmail(email) {
-  const subject = (email.subject || "").toLowerCase();
-  const textContent = (email.text || "").toLowerCase();
-  const htmlContent = (email.html || "").toLowerCase();
+  const subject = normalizeContent(email.subject || "");
+  const textContent = normalizeContent(email.text || "");
+  const htmlContent = normalizeContent(email.html || "");
   const combinedContent = subject + " " + textContent + " " + htmlContent;
   
-  const strictHouseholdKeywords = [
-    'household',
-    'temporary access',
-    'temporary code',
-    'travel',
-    'traveling',
-    'away from home',
-    'get code',
-    'getcode',
-    'get-code',
-    'access code',
-    'update your household',
-    'add to household',
-    'your household',
-    'temporary member',
-    'yesitwasme',
-    'yes-it-was-me',
-    'notme',
-    'not-me',
+  const excludePatterns = [
+    /password\s*reset/i,
+    /reset\s*(your\s*)?password/i,
+    /forgot\s*password/i,
+    /password\s*(changed|updated)/i,
+    /change\s*(your\s*)?password/i,
+    /new\s*device/i,
+    /new\s*sign[\s-]*in/i,
+    /someone\s*(is\s*)?(using|else)/i,
+    /signed\s*in/i,
+    /sign\s*in\s*somewhere/i,
+    /was\s*it\s*you/i,
+    /wasn['']?t\s*me/i,
+    /payment/i,
+    /billing/i,
+    /subscription/i,
+    /renewal/i,
+    /plan\s*change/i,
+    /profile/i,
+    /what\s*to\s*watch/i,
+    /new\s*on\s*netflix/i,
+    /coming\s*soon/i,
+    /recommendation/i,
+    /top\s*picks/i,
+    /newsletter/i,
+    /a\s*new\s*device\s*is\s*using/i,
+    /protect\s*your\s*account/i,
   ];
   
-  const excludeKeywords = [
-    'password reset',
-    'reset your password',
-    'forgot password',
-    'password changed',
-    'password updated',
-    'payment',
-    'billing',
-    'subscription',
-    'renewal',
-    'plan change',
-    'profile',
-    'what to watch',
-    'new on netflix',
-    'coming soon',
-    'recommendation',
-    'top picks',
-    'newsletter',
-    'new device',
-    'new sign-in',
-    'someone is using',
-    'someone else',
-    'change your password',
-    'signed in',
-    'sign in somewhere',
-    'was it you',
-    'wasn\'t me',
-  ];
-  
-  for (const exclude of excludeKeywords) {
-    if (combinedContent.includes(exclude)) {
+  for (const pattern of excludePatterns) {
+    if (pattern.test(combinedContent)) {
       return false;
     }
   }
   
-  for (const keyword of strictHouseholdKeywords) {
-    if (combinedContent.includes(keyword)) {
+  const strictHouseholdPatterns = [
+    /household/i,
+    /temporary\s*access/i,
+    /temporary\s*code/i,
+    /travel/i,
+    /away\s*from\s*home/i,
+    /get\s*code/i,
+    /getcode/i,
+    /get-code/i,
+    /access\s*code/i,
+    /update\s*your\s*household/i,
+    /add\s*to\s*household/i,
+    /your\s*household/i,
+    /temporary\s*member/i,
+    /yesitwasme/i,
+    /yes-it-was-me/i,
+    /notme/i,
+    /not-me/i,
+  ];
+  
+  for (const pattern of strictHouseholdPatterns) {
+    if (pattern.test(combinedContent)) {
       return true;
     }
   }
