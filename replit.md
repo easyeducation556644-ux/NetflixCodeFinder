@@ -147,9 +147,14 @@ The application is configured for Vercel deployment with:
 
 ## Recent Changes
 
-- **Vercel API Fix (Dec 2025)**: Fixed `api/findcode.js` to return the same `{ emails: [...], totalCount: ... }` format as the Express backend, ensuring Vercel serverless deployment works correctly
-- **Link Display Improvement (Dec 2025)**: Updated frontend to show only clickable link labels instead of full email content. Links now display with labels like "Go to Account" or "Open Netflix" that open in new tabs
+- **Simplified Email Filtering (Dec 2025)**: Rewrote email filtering to use a simpler, more reliable approach matching the Telegram bot pattern:
+  1. Check translated subject for keywords: "temporary" or "household"
+  2. Check email body for Netflix account links (`netflix.com/account`)
+  3. Both conditions must be true for a match
+- **Inline Button Placement (Dec 2025)**: Action buttons now appear inline where links originally existed in email content, using placeholder-based segmentation
+- **Vercel API Fix (Dec 2025)**: Fixed `api/findcode.js` to return the same `{ emails: [...], totalCount: ... }` format as the Express backend
+- **Link Display Improvement (Dec 2025)**: Links display with labels like "Go to Account" or "Open Netflix" that open in new tabs
 - **Access Code Display**: Added prominent display of 4-digit access codes when found in emails
-- **Translation Feature**: Email subjects and content are now automatically translated to English using the translatte library
+- **Translation Feature**: Email subjects are automatically translated to English using the translatte library
 - **Production Ready**: All console.log statements removed for production deployment
 - **Vercel Ready**: Added Vercel configuration and serverless API function

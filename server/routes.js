@@ -312,122 +312,24 @@ function normalizeText(text) {
     .trim();
 }
 
-function extractUrlsFromHtml(html) {
-  const urls = [];
-  const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
-  let match;
-  while ((match = hrefRegex.exec(html)) !== null) {
-    urls.push(match[1].replace(/&amp;/g, "&").toLowerCase());
-  }
-  return urls;
+function extractTempLink(text) {
+  const match = text.match(/https:\/\/www\.netflix\.com\/account\S+/i);
+  return match ? match[0] : null;
 }
 
-function isHouseholdEmailByUrls(htmlContent) {
-  const urls = extractUrlsFromHtml(htmlContent);
-  
-  const householdUrlPatterns = [
-    'travel',
-    'temporary',
-    'getcode',
-    'get-code',
-    'get_code',
-    'account/travel',
-    'accountaccess',
-    'tempaccess',
-    'temp-access',
-  ];
-  
-  const excludeUrlPatterns = [
-    'password',
-    'reset',
-    'signin',
-    'sign-in',
-    'login',
-    'browse',
-    'watch',
-    'title',
-    'tudum',
-    'help.netflix',
-    'unsubscribe',
-    'notification',
-    'privacy',
-    'terms',
-    'legal',
-  ];
-  
-  for (const url of urls) {
-    if (url.includes('netflix.com') || url.includes('nflx')) {
-      for (const pattern of householdUrlPatterns) {
-        if (url.includes(pattern)) {
-          let isExcluded = false;
-          for (const excludePattern of excludeUrlPatterns) {
-            if (url.includes(excludePattern)) {
-              isExcluded = true;
-              break;
-            }
-          }
-          if (!isExcluded) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-  
-  return false;
+function hasAccountLink(htmlContent) {
+  return /netflix\.com\/account/i.test(htmlContent);
 }
 
-function isHouseholdEmailByContent(translatedText) {
-  const content = normalizeText(translatedText);
+function isHouseholdEmail(translatedSubject, htmlContent) {
+  const subject = (translatedSubject || "").toLowerCase();
   
-  const excludePatterns = [
-    /\bpassword\b/i,
-    /\breset\b/i,
-    /\bnew\s*device\b/i,
-    /\bsomeone\s*(is\s*)?(using|else)\b/i,
-    /\bchange\s*(your\s*)?password\b/i,
-    /\bprotect\s*(your\s*)?account\b/i,
-    /\bsigned?\s*in\b/i,
-    /\bverify\b/i,
-    /\bconfirm\b/i,
-    /\bpayment\b/i,
-    /\bbilling\b/i,
-    /\bsubscription\b/i,
-    /\brenewal\b/i,
-    /\bprofile\b/i,
-    /\bnewsletter\b/i,
-    /\bwhat\s*to\s*watch\b/i,
-    /\brecommendation\b/i,
-    /\busing\s*your\s*account\b/i,
-    /\bcore\s*domestic\b/i,
-    /\bcore\s*home\b/i,
-  ];
+  const subjectKeywords = ["temporary", "household"];
+  const hasKeyword = subjectKeywords.some(kw => subject.includes(kw));
   
-  for (const pattern of excludePatterns) {
-    if (pattern.test(content)) {
-      return false;
-    }
-  }
+  const hasLink = hasAccountLink(htmlContent);
   
-  const householdPatterns = [
-    /\bhousehold\b/i,
-    /\btemporary\s*access\b/i,
-    /\btemporary\s*code\b/i,
-    /\btravel(ing|er)?\b/i,
-    /\baway\s*from\s*home\b/i,
-    /\bget\s*(a\s*)?code\b/i,
-    /\baccess\s*code\b/i,
-    /\btemporary\s*member\b/i,
-    /\bwatch(ing)?\s*(away|outside|somewhere)\b/i,
-  ];
-  
-  for (const pattern of householdPatterns) {
-    if (pattern.test(content)) {
-      return true;
-    }
-  }
-  
-  return false;
+  return hasKeyword && hasLink;
 }
 
 function getUserFriendlyError(error) {
@@ -583,20 +485,12 @@ function searchNetflixEmails(imapConfig, userEmail) {
               let householdEmail = null;
               
               for (const email of sortedEmails) {
+                const subject = email.subject || "";
                 const htmlContent = email.html || "";
                 
-                if (isHouseholdEmailByUrls(htmlContent)) {
-                  householdEmail = email;
-                  break;
-                }
+                const translatedSubject = await translateToEnglish(subject);
                 
-                const subject = email.subject || "";
-                const textContent = email.text || "";
-                const combinedRaw = subject + " " + textContent + " " + htmlContent;
-                
-                const translatedContent = await translateToEnglish(combinedRaw);
-                
-                if (isHouseholdEmailByContent(translatedContent)) {
+                if (isHouseholdEmail(translatedSubject, htmlContent)) {
                   householdEmail = email;
                   break;
                 }
