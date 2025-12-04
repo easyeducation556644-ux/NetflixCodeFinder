@@ -6,8 +6,6 @@ async function translateToEnglish(text) {
   if (!text || text.trim() === "") return text;
   
   try {
-    console.log("Translating text (length:", text.length, ")");
-    
     if (text.length > 3000) {
       const chunks = [];
       const sentences = text.split(/(?<=[.!?])\s+/);
@@ -36,10 +34,8 @@ async function translateToEnglish(text) {
     }
     
     const result = await translatte(text, { to: "en" });
-    console.log("Translation result:", result.text ? result.text.substring(0, 100) + "..." : "empty");
     return result.text;
   } catch (error) {
-    console.error("Translation error:", error.message);
     return text;
   }
 }
@@ -702,7 +698,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
               try {
                 translatedHtml = await translateHtmlContent(htmlContent);
               } catch (e) {
-                console.log("HTML Translation error:", e);
                 translatedHtml = htmlContent;
               }
               

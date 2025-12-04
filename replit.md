@@ -44,7 +44,7 @@ Preferred communication style: Simple, everyday language.
 
 **Solution**: Conditional middleware and build pipeline.
 
-- **Development**: Vite dev server middleware with HMR, Replit-specific plugins (runtime error overlay, cartographer, dev banner)
+- **Development**: Vite dev server middleware with HMR for fast development iteration
 - **Production**: Pre-built static assets served by Express, bundled server code via esbuild
 - **Build Process**: Separate client (Vite) and server (esbuild) builds, bundling all dependencies except native modules
 
@@ -135,8 +135,7 @@ These are configured but not currently utilized by the core email lookup functio
 **Important**: IMAP requires long-lived sockets that are incompatible with Vercel serverless functions. The `api/findcode.js` file is provided for reference but will not work on Vercel's serverless infrastructure.
 
 **Recommended Deployment Options**:
-- **Replit Deployments**: Use Replit's built-in deployment (recommended)
-- **Traditional VPS**: Deploy to a server that supports persistent connections (Railway, Render, DigitalOcean, etc.)
+- **Cloud Platforms**: Deploy to a server that supports persistent connections (Railway, Render, DigitalOcean, etc.)
 - **Container Hosting**: Docker-based deployment on any container platform
 
 The application is configured with:
