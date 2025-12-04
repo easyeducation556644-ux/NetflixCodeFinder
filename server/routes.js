@@ -162,14 +162,16 @@ async function processContentWithLinks(html, text) {
     processedHtml = processedHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
     processedHtml = processedHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
     
-    const linkRegex = /<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+    const linkRegex = /<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
     
-    processedHtml = processedHtml.replace(linkRegex, (match, url, linkText) => {
+    processedHtml = processedHtml.replace(linkRegex, (match, url, linkContent) => {
       url = url.replace(/&amp;/g, "&");
       const urlLower = url.toLowerCase();
       
+      const plainText = linkContent.replace(/<[^>]+>/g, '').trim();
+      
       if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms") || urlLower.includes("legal")) {
-        return linkText;
+        return plainText;
       }
       
       const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
@@ -187,7 +189,7 @@ async function processContentWithLinks(html, text) {
         return `\n${placeholder}\n`;
       }
       
-      return linkText;
+      return plainText;
     });
     
     processedHtml = processedHtml.replace(/<br\s*\/?>/gi, "\n");
@@ -306,7 +308,7 @@ function isHouseholdEmail(email) {
   const htmlContent = (email.html || "").toLowerCase();
   const combinedContent = subject + " " + textContent + " " + htmlContent;
   
-  const householdKeywords = [
+  const strictHouseholdKeywords = [
     'household',
     'temporary access',
     'temporary code',
@@ -317,37 +319,19 @@ function isHouseholdEmail(email) {
     'getcode',
     'get-code',
     'access code',
-    'someone is using',
-    'someone else',
     'update your household',
     'add to household',
     'your household',
-    'sign in somewhere',
-    'signed in somewhere',
-    'new device',
-    'new sign-in',
-    'new signin',
+    'temporary member',
     'yesitwasme',
     'yes-it-was-me',
     'notme',
     'not-me',
-    'wasn\'t me',
-    'was it you',
-    'temporary member',
-    'account access',
-    'accountaccess',
-    'verify your identity',
-    'confirm it was you',
-    'confirm this was you',
-    'different location',
-    'unusual sign-in',
-    'unusual signin',
   ];
   
   const excludeKeywords = [
     'password reset',
     'reset your password',
-    'change your password',
     'forgot password',
     'password changed',
     'password updated',
@@ -363,6 +347,15 @@ function isHouseholdEmail(email) {
     'recommendation',
     'top picks',
     'newsletter',
+    'new device',
+    'new sign-in',
+    'someone is using',
+    'someone else',
+    'change your password',
+    'signed in',
+    'sign in somewhere',
+    'was it you',
+    'wasn\'t me',
   ];
   
   for (const exclude of excludeKeywords) {
@@ -371,7 +364,7 @@ function isHouseholdEmail(email) {
     }
   }
   
-  for (const keyword of householdKeywords) {
+  for (const keyword of strictHouseholdKeywords) {
     if (combinedContent.includes(keyword)) {
       return true;
     }
