@@ -2,12 +2,82 @@ import Imap from "imap";
 import { simpleParser } from "mailparser";
 import translatte from "translatte";
 
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  
+  const trimmedUrl = url.trim();
+  
+  let urlObj;
+  try {
+    urlObj = new URL(trimmedUrl);
+  } catch (e) {
+    return null;
+  }
+  
+  const protocol = urlObj.protocol.toLowerCase();
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    return null;
+  }
+  
+  let decodedUrl;
+  try {
+    decodedUrl = decodeURIComponent(trimmedUrl.toLowerCase());
+  } catch (e) {
+    decodedUrl = trimmedUrl.toLowerCase();
+  }
+  
+  const dangerousPatterns = [
+    'javascript:',
+    'data:',
+    'vbscript:',
+    '<script',
+    'onerror',
+    'onclick',
+    'onload',
+    'onmouseover',
+  ];
+  
+  for (const pattern of dangerousPatterns) {
+    if (decodedUrl.includes(pattern)) {
+      return null;
+    }
+  }
+  
+  const hostname = urlObj.hostname.toLowerCase();
+  const allowedDomains = [
+    'netflix.com',
+    'www.netflix.com',
+    'nflxso.net',
+    'www.nflxso.net',
+    'email.netflix.com',
+    'click.netflix.com',
+  ];
+  
+  const isAllowed = allowedDomains.some(domain => {
+    return hostname === domain || hostname.endsWith('.' + domain);
+  });
+  
+  if (!isAllowed) {
+    return null;
+  }
+  
+  return trimmedUrl;
+}
+
 async function translateToEnglish(text) {
   if (!text || text.trim() === "") return text;
   
   try {
-    console.log("Translating text (length:", text.length, ")");
-    
     if (text.length > 3000) {
       const chunks = [];
       const sentences = text.split(/(?<=[.!?])\s+/);
@@ -36,12 +106,100 @@ async function translateToEnglish(text) {
     }
     
     const result = await translatte(text, { to: "en" });
-    console.log("Translation result:", result.text ? result.text.substring(0, 100) + "..." : "empty");
     return result.text;
   } catch (error) {
-    console.error("Translation error:", error.message);
     return text;
   }
+}
+
+async function translateHtmlContentPreserveOriginal(html) {
+  if (!html || html.trim() === "") return html;
+  
+  let processedHtml = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<\?xml[^>]*\?>/gi, '')
+    .replace(/<!DOCTYPE[^>]*>/gi, '');
+  
+  const footerPatterns = [
+    /<[^>]*>[\s\S]*?we're here to help[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?visit the help center[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?the netflix team[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?this message was sent to[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?this message was mailed to[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?netflix international[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?need help\?[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?questions\? visit[\s\S]*$/i,
+    /<[^>]*>[\s\S]*?do you have any questions[\s\S]*$/i,
+  ];
+  
+  for (const pattern of footerPatterns) {
+    processedHtml = processedHtml.replace(pattern, '');
+  }
+  
+  const textToTranslate = [];
+  let textIndex = 0;
+  
+  processedHtml = processedHtml.replace(/>([^<]+)</g, (match, text) => {
+    const trimmedText = text.trim();
+    if (trimmedText && trimmedText.length > 1 && !/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"&nbsp;]+$/.test(trimmedText)) {
+      const placeholder = `>___TEXT_${textIndex}___<`;
+      textToTranslate.push({ index: textIndex, text: trimmedText });
+      textIndex++;
+      return placeholder;
+    }
+    return match;
+  });
+  
+  for (const item of textToTranslate) {
+    try {
+      const translated = await translateToEnglish(item.text);
+      item.translated = translated;
+    } catch (e) {
+      item.translated = item.text;
+    }
+  }
+  
+  for (const item of textToTranslate) {
+    processedHtml = processedHtml.replace(`>___TEXT_${item.index}___<`, `>${escapeHtml(item.translated)}<`);
+  }
+  
+  processedHtml = processedHtml.replace(/<a([^>]*href\s*=\s*["']([^"']+)["'][^>]*)>/gi, (match, attrs, url) => {
+    const urlClean = url.replace(/&amp;/g, '&').toLowerCase();
+    const safeUrl = sanitizeUrl(url.replace(/&amp;/g, '&'));
+    
+    if (!safeUrl) {
+      return match;
+    }
+    
+    const isYesItsMe = urlClean.includes('yesitwasme') || 
+                       urlClean.includes('yes-it-was-me') ||
+                       urlClean.includes('yes_it_was_me');
+    
+    const isGetCode = urlClean.includes('getcode') || 
+                      urlClean.includes('get-code') ||
+                      urlClean.includes('get_code') ||
+                      urlClean.includes('travel') ||
+                      urlClean.includes('temporary-access') ||
+                      (urlClean.includes('/account') && !urlClean.includes('signout'));
+    
+    if (isYesItsMe || isGetCode) {
+      let newAttrs = attrs;
+      if (attrs.includes('style=')) {
+        newAttrs = attrs.replace(/style\s*=\s*["']([^"']*)["']/i, (m, styles) => {
+          return `style="${styles}; color: #ffffff !important;"`;
+        });
+      } else {
+        newAttrs = attrs + ' style="color: #ffffff !important;"';
+      }
+      return `<a${newAttrs} target="_blank" rel="noopener noreferrer">`;
+    }
+    
+    return `<a${attrs} target="_blank" rel="noopener noreferrer">`;
+  });
+  
+  const wrappedHtml = `<div class="netflix-email-original" style="font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;">${processedHtml}</div>`;
+  
+  return wrappedHtml;
 }
 
 function getLinkLabel(url) {
@@ -487,91 +645,26 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 return;
               }
 
-              const formattedEmails = await Promise.all([householdEmail].map(async (email) => {
-                const htmlContent = email.html || "";
-                const textContent = email.text || "";
-                const combinedContent = textContent + " " + htmlContent;
-                
-                const translatedSubject = await translateToEnglish(email.subject || "Email");
-                const contentSegments = await processContentWithLinks(htmlContent, textContent);
-                const accessCode = extractAccessCode(combinedContent);
-                
-                let translatedHtml = htmlContent;
-                try {
-                  const textOnly = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                  if (textOnly.length > 0 && textOnly.length < 15000) {
-                    const translatedText = await translateToEnglish(textOnly);
-                    const paragraphs = translatedText.split(/\n+/).filter(p => p.trim());
-                    
-                    let mainButtonHtml = '';
-                    let deviceInfoHtml = '';
-                    
-                    for (const seg of contentSegments) {
-                      if (seg.type === 'buttons' && seg.buttons) {
-                        for (const btn of seg.buttons) {
-                          if (btn.category === 'yesItWasMe') {
-                            mainButtonHtml = `
-                              <a href="${btn.url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 15px;">
-                                ${btn.label}
-                              </a>`;
-                            break;
-                          }
-                        }
-                      }
-                    }
-                    
-                    const deviceMatch = translatedText.match(/request.*?from.*?device.*?(\w+.*?stick|\w+.*?tv|\w+.*?phone|\w+.*?tablet)/i);
-                    const dateMatch = translatedText.match(/(\w+\s+\d+,?\s*\d*|\d+\s+\w+,?\s*\d*)/i);
-                    
-                    if (deviceMatch || dateMatch) {
-                      deviceInfoHtml = `
-                        <div style="background-color: #ffffff; border-radius: 8px; padding: 16px 20px; margin: 20px 0; display: flex; align-items: flex-start; gap: 16px;">
-                          <div style="width: 40px; height: 40px; background-color: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                            <span style="font-size: 20px;">📺</span>
-                          </div>
-                          <div style="flex: 1; color: #333333; font-size: 14px; line-height: 1.5;">
-                            <div>Request sent from device</div>
-                            <div style="font-weight: bold; margin: 4px 0;">${deviceMatch ? deviceMatch[1] : 'Streaming Device'}</div>
-                            <div style="color: #666666;">${dateMatch ? dateMatch[1] : ''}</div>
-                          </div>
-                        </div>
-                        <div style="text-align: center; margin: 20px 0;">
-                          ${mainButtonHtml}
-                        </div>
-                        <p style="color: #999999; font-size: 13px; margin-top: 16px;">* The link expires after 15 minutes.</p>
-                      `;
-                    }
-                    
-                    const bodyParagraphs = paragraphs.slice(0, Math.min(4, paragraphs.length));
-                    
-                    translatedHtml = `
-                      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; background-color: #000000; color: #ffffff; padding: 0;">
-                        <div style="padding: 20px;">
-                          <h1 style="color: #ffffff; font-size: 28px; font-weight: bold; margin: 0 0 20px 0; line-height: 1.3;">
-                            Do you want to update your Netflix Household?
-                          </h1>
-                          ${bodyParagraphs.map(p => `<p style="margin: 0 0 16px 0; color: #ffffff; font-size: 15px; line-height: 1.6;">${p}</p>`).join('')}
-                          ${deviceInfoHtml || (mainButtonHtml ? `<div style="text-align: center; margin: 24px 0;">${mainButtonHtml}</div>` : '')}
-                        </div>
-                      </div>`;
-                  }
-                } catch (e) {
-                  console.log("Translation error:", e);
-                }
-                
-                return {
-                  id: email.messageId || `${Date.now()}-${Math.random()}`,
-                  subject: translatedSubject,
-                  receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
-                  from: email.from?.text || "",
-                  to: email.to?.text || "",
-                  contentSegments: contentSegments,
-                  accessCode: accessCode,
-                  rawHtml: translatedHtml,
-                };
-              }));
+              const htmlContent = householdEmail.html || "";
+              const translatedSubject = await translateToEnglish(householdEmail.subject || "Email");
+              
+              let translatedHtml = htmlContent;
+              try {
+                translatedHtml = await translateHtmlContentPreserveOriginal(htmlContent);
+              } catch (e) {
+                translatedHtml = htmlContent;
+              }
+              
+              const formattedEmail = {
+                id: householdEmail.messageId || `${Date.now()}-${Math.random()}`,
+                subject: translatedSubject,
+                receivedAt: householdEmail.date ? householdEmail.date.toISOString() : new Date().toISOString(),
+                from: householdEmail.from?.text || "",
+                to: householdEmail.to?.text || "",
+                rawHtml: translatedHtml,
+              };
 
-              resolve(formattedEmails);
+              resolve([formattedEmail]);
             } catch (parseError) {
               imap.end();
               reject(parseError);
