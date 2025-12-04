@@ -14,16 +14,24 @@ async function translateToEnglish(text) {
 }
 
 function getLinkLabel(url) {
-  if (url.includes("netflix.com/account/travel")) {
-    return "Get Code";
-  } else if (url.includes("netflix.com/account")) {
+  const urlLower = url.toLowerCase();
+  
+  if (urlLower.includes("yesitwasme") || urlLower.includes("yes-it-was-me") || urlLower.includes("yes_it_was_me")) {
+    return "Yes, It Was Me";
+  } else if (urlLower.includes("notme") || urlLower.includes("not-me") || urlLower.includes("not_me") || urlLower.includes("wasntme")) {
+    return "No, It Wasn't Me";
+  } else if (urlLower.includes("travel") || urlLower.includes("temporary-access")) {
+    return "Get Temporary Access Code";
+  } else if (urlLower.includes("verify") || urlLower.includes("confirm")) {
+    return "Verify";
+  } else if (urlLower.includes("password") || urlLower.includes("reset")) {
+    return "Reset Password";
+  } else if (urlLower.includes("loginhelp") || urlLower.includes("login-help")) {
+    return "Login Help";
+  } else if (urlLower.includes("/account")) {
     return "Go to Account";
-  } else if (url.includes("netflix.com/password")) {
-    return "Change Password";
-  } else if (url.includes("netflix.com/help")) {
-    return "Help Center";
-  } else if (url.includes("netflix.com")) {
-    return "Open Netflix";
+  } else if (urlLower.includes("/e/") || urlLower.includes("nflink")) {
+    return "Open Link";
   }
   return "Open Link";
 }

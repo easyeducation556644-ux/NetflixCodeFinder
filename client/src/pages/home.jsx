@@ -26,14 +26,27 @@ function ContentSegments({ segments, emailId }) {
 
   const mainLinks = segments.filter(s => s.type === "link" && s.isMain);
   const textSegments = segments.filter(s => s.type === "text");
+  
+  const fullText = textSegments.map(s => s.value).join(" ");
+  
+  const lines = fullText.split('\n').filter(line => line.trim());
+  const halfIndex = Math.ceil(lines.length / 2);
+  const firstHalf = lines.slice(0, Math.min(halfIndex, 5)).join('\n');
+  const secondHalf = lines.slice(Math.min(halfIndex, 5)).join('\n');
 
   return (
     <div 
       className="space-y-4"
       data-testid={`content-${emailId}`}
     >
+      {firstHalf && (
+        <div className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">
+          {firstHalf}
+        </div>
+      )}
+      
       {mainLinks.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 py-2">
           {mainLinks.map((segment, index) => (
             <a
               key={index}
@@ -50,13 +63,9 @@ function ContentSegments({ segments, emailId }) {
         </div>
       )}
       
-      {textSegments.length > 0 && (
-        <div className="text-neutral-300 text-sm leading-relaxed">
-          {textSegments.map((segment, index) => (
-            <span key={index} className="whitespace-pre-wrap">
-              {segment.value}{" "}
-            </span>
-          ))}
+      {secondHalf && (
+        <div className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">
+          {secondHalf}
         </div>
       )}
     </div>
