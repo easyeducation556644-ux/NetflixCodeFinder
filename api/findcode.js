@@ -137,7 +137,17 @@ function hasAccountLink(htmlContent) {
 function isHouseholdEmail(translatedSubject, htmlContent) {
   const subject = (translatedSubject || "").toLowerCase();
   
-  const subjectKeywords = ["temporary", "household"];
+  const subjectKeywords = [
+    "temporary",
+    "household", 
+    "temp",
+    "home",
+    "update",
+    "important",
+    "core",
+    "access code",
+    "verification"
+  ];
   const hasKeyword = subjectKeywords.some(kw => subject.includes(kw));
   
   const hasLink = hasAccountLink(htmlContent);
