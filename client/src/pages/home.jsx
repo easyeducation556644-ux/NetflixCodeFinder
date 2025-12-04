@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Mail, AlertCircle, Loader2 } from "lucide-react";
-import DOMPurify from "dompurify";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,110 +15,13 @@ const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
 });
 
-function EmailContent({ htmlContent, emailId }) {
-  const iframeRef = useRef(null);
-  const [iframeHeight, setIframeHeight] = useState(400);
-
-  useEffect(() => {
-    if (iframeRef.current && htmlContent) {
-      const iframe = iframeRef.current;
-      const doc = iframe.contentDocument || iframe.contentWindow.document;
-      
-      const sanitizedHtml = DOMPurify.sanitize(htmlContent, {
-        ADD_TAGS: ['style'],
-        ADD_ATTR: ['target', 'rel'],
-        ALLOW_DATA_ATTR: true,
-      });
-      
-      const styledHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            * {
-              box-sizing: border-box;
-              max-width: 100% !important;
-            }
-            html, body {
-              margin: 0;
-              padding: 12px;
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-              background-color: #1a1a1a !important;
-              color: #e5e5e5 !important;
-              line-height: 1.5;
-              overflow-x: hidden !important;
-              width: 100% !important;
-              word-wrap: break-word !important;
-              overflow-wrap: break-word !important;
-            }
-            a {
-              color: #e50914 !important;
-              word-break: break-all !important;
-            }
-            table {
-              max-width: 100% !important;
-              width: 100% !important;
-              table-layout: fixed !important;
-            }
-            td, th {
-              max-width: 100% !important;
-              word-wrap: break-word !important;
-              overflow-wrap: break-word !important;
-            }
-            img {
-              max-width: 100% !important;
-              height: auto !important;
-              display: block !important;
-            }
-            div, p, span {
-              max-width: 100% !important;
-              word-wrap: break-word !important;
-              overflow-wrap: break-word !important;
-            }
-            pre, code {
-              white-space: pre-wrap !important;
-              word-wrap: break-word !important;
-              max-width: 100% !important;
-            }
-          </style>
-        </head>
-        <body>
-          ${sanitizedHtml}
-        </body>
-        </html>
-      `;
-      
-      doc.open();
-      doc.write(styledHtml);
-      doc.close();
-
-      const checkHeight = () => {
-        try {
-          const height = doc.body.scrollHeight;
-          if (height > 0) {
-            setIframeHeight(Math.min(height + 32, 800));
-          }
-        } catch (e) {}
-      };
-
-      setTimeout(checkHeight, 100);
-      setTimeout(checkHeight, 500);
-      setTimeout(checkHeight, 1000);
-    }
-  }, [htmlContent]);
-
+function EmailContent({ textContent, emailId }) {
   return (
-    <div className="w-full overflow-hidden">
-      <iframe
-        ref={iframeRef}
-        title={`email-content-${emailId}`}
-        className="w-full border-0 rounded-lg bg-neutral-900"
-        style={{ height: `${iframeHeight}px`, minHeight: '300px', maxWidth: '100%' }}
-        sandbox="allow-same-origin"
-        data-testid={`iframe-email-${emailId}`}
-      />
+    <div 
+      className="w-full bg-neutral-900 rounded-lg p-4 text-neutral-200 text-sm leading-relaxed whitespace-pre-wrap"
+      data-testid={`content-email-${emailId}`}
+    >
+      {textContent || "No content available"}
     </div>
   );
 }
@@ -294,9 +196,9 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="p-2">
+                  <div className="p-3">
                     <EmailContent 
-                      htmlContent={email.htmlContent} 
+                      textContent={email.textContent} 
                       emailId={email.id || index}
                     />
                   </div>
