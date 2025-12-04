@@ -518,6 +518,24 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const contentSegments = await processContentWithLinks(htmlContent, textContent);
               const accessCode = extractAccessCode(combinedContent);
               
+              let translatedHtml = htmlContent;
+              try {
+                const textOnly = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (textOnly.length > 0 && textOnly.length < 5000) {
+                  const translatedText = await translateToEnglish(textOnly);
+                  translatedHtml = `<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                      <span style="color: #E50914; font-size: 48px; font-weight: bold;">N</span>
+                    </div>
+                    <div style="font-size: 16px; line-height: 1.6; color: #333;">
+                      ${translatedText.split('\n').map(p => p.trim() ? `<p style="margin-bottom: 16px;">${p}</p>` : '').join('')}
+                    </div>
+                  </div>`;
+                }
+              } catch (e) {
+                console.log("Translation error:", e);
+              }
+              
               const formattedEmail = {
                 id: householdEmail.messageId || `${Date.now()}-${Math.random()}`,
                 subject: translatedSubject,
@@ -526,7 +544,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 to: householdEmail.to?.text || "",
                 contentSegments: contentSegments,
                 accessCode: accessCode,
-                rawHtml: htmlContent,
+                rawHtml: translatedHtml,
               };
 
               resolve([formattedEmail]);

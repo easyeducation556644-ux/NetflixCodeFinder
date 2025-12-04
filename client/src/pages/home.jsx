@@ -122,10 +122,10 @@ function ContentSegments({ segments, emailId }) {
 }
 
 function EmailContent({ email, emailId }) {
-  const { rawHtml } = email;
+  const { rawHtml, contentSegments } = email;
   
   const sanitizedHtml = DOMPurify.sanitize(rawHtml || "", {
-    ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'a', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'img', 'ul', 'ol', 'li', 'hr'],
+    ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'a', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'img', 'ul', 'ol', 'li', 'hr', 'style'],
     ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'style', 'class', 'width', 'height'],
   });
   
@@ -135,9 +135,49 @@ function EmailContent({ email, emailId }) {
       data-testid={`email-content-${emailId}`}
     >
       <div 
-        className="email-content-wrapper bg-white text-black rounded-lg overflow-hidden"
+        className="email-content-wrapper bg-white text-black rounded-xl overflow-x-auto p-4 sm:p-6"
+        style={{ 
+          maxWidth: '100%',
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word'
+        }}
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
+      {contentSegments && contentSegments.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-3 justify-center">
+          {contentSegments.map((segment, index) => {
+            if (segment.type === "buttons" && segment.buttons) {
+              return segment.buttons.map((btn, btnIndex) => (
+                <a
+                  key={`${index}-${btnIndex}`}
+                  href={btn.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-semibold text-sm sm:text-base rounded-full shadow-lg transition-all duration-200 hover:scale-105"
+                  data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
+                >
+                  {btn.label}
+                </a>
+              ));
+            }
+            if (segment.type === "link" && segment.isMain) {
+              return (
+                <a
+                  key={index}
+                  href={segment.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-semibold text-sm sm:text-base rounded-full shadow-lg transition-all duration-200 hover:scale-105"
+                  data-testid={`button-main-${emailId}-${index}`}
+                >
+                  {segment.label}
+                </a>
+              );
+            }
+            return null;
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -188,13 +228,13 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-4 bg-neutral-950">
+    <div className="min-h-screen w-full flex flex-col items-center p-2 sm:p-4 bg-neutral-950">
       
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-2xl space-y-6 py-8"
+        className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8"
       >
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold text-primary tracking-wider font-display">
@@ -285,23 +325,23 @@ export default function Home() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden"
+                  className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl"
                   data-testid={`card-email-${index}`}
                 >
-                  <div className="p-4 border-b border-neutral-800">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white text-xl font-bold">N</span>
+                  <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/80">
+                    <div className="flex items-center justify-between gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-white text-lg sm:text-xl font-bold">N</span>
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-medium text-white text-sm">Netflix</span>
-                            <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <span className="font-semibold text-white text-sm sm:text-base">Netflix</span>
+                            <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
                           </div>
-                          <p className="text-neutral-400 text-xs truncate" data-testid={`text-subject-${index}`}>
+                          <p className="text-neutral-400 text-xs sm:text-sm line-clamp-2" data-testid={`text-subject-${index}`}>
                             {email.subject}
                           </p>
                         </div>
@@ -312,7 +352,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="p-3">
+                  <div className="p-2 sm:p-4">
                     <EmailContent 
                       email={email}
                       emailId={email.id || index}
