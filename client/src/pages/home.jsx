@@ -66,7 +66,7 @@ function ContentSegments({ segments, emailId }) {
                     href={btn.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-800/80 hover:bg-red-700/80 text-white font-medium text-sm rounded-full transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold text-base rounded-full shadow-lg shadow-red-900/30 hover:shadow-red-800/40 transition-all duration-200 hover:scale-105"
                     data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
                   >
                     <span>{btn.label}</span>
@@ -99,12 +99,12 @@ function ContentSegments({ segments, emailId }) {
           }
           
           return (
-            <div key={index} className="py-2">
+            <div key={index} className="py-3">
               <a
                 href={segment.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-800/80 hover:bg-red-700/80 text-white font-medium text-sm rounded-full transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold text-base rounded-full shadow-lg shadow-red-900/30 hover:shadow-red-800/40 transition-all duration-200 hover:scale-105"
                 data-testid={`button-main-link-${emailId}-${index}`}
               >
                 <span>{segment.label}</span>
