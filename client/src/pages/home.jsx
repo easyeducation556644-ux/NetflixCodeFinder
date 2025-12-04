@@ -40,24 +40,48 @@ function EmailContent({ htmlContent, emailId }) {
           <style>
             * {
               box-sizing: border-box;
+              max-width: 100% !important;
             }
-            body {
+            html, body {
               margin: 0;
-              padding: 16px;
+              padding: 12px;
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
               background-color: #1a1a1a !important;
               color: #e5e5e5 !important;
               line-height: 1.5;
+              overflow-x: hidden !important;
+              width: 100% !important;
+              word-wrap: break-word !important;
+              overflow-wrap: break-word !important;
             }
             a {
               color: #e50914 !important;
+              word-break: break-all !important;
             }
             table {
               max-width: 100% !important;
+              width: 100% !important;
+              table-layout: fixed !important;
+            }
+            td, th {
+              max-width: 100% !important;
+              word-wrap: break-word !important;
+              overflow-wrap: break-word !important;
             }
             img {
               max-width: 100% !important;
               height: auto !important;
+              display: block !important;
+            }
+            div, p, span {
+              max-width: 100% !important;
+              word-wrap: break-word !important;
+              overflow-wrap: break-word !important;
+            }
+            pre, code {
+              white-space: pre-wrap !important;
+              word-wrap: break-word !important;
+              max-width: 100% !important;
             }
           </style>
         </head>
@@ -87,14 +111,16 @@ function EmailContent({ htmlContent, emailId }) {
   }, [htmlContent]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      title={`email-content-${emailId}`}
-      className="w-full border-0 rounded-lg bg-neutral-900"
-      style={{ height: `${iframeHeight}px`, minHeight: '300px' }}
-      sandbox="allow-same-origin"
-      data-testid={`iframe-email-${emailId}`}
-    />
+    <div className="w-full overflow-hidden">
+      <iframe
+        ref={iframeRef}
+        title={`email-content-${emailId}`}
+        className="w-full border-0 rounded-lg bg-neutral-900"
+        style={{ height: `${iframeHeight}px`, minHeight: '300px', maxWidth: '100%' }}
+        sandbox="allow-same-origin"
+        data-testid={`iframe-email-${emailId}`}
+      />
+    </div>
   );
 }
 

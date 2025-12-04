@@ -1,5 +1,17 @@
 import Imap from "imap";
 import { simpleParser } from "mailparser";
+import translatte from "translatte";
+
+async function translateToEnglish(text) {
+  if (!text || text.trim() === "") return text;
+  
+  try {
+    const result = await translatte(text, { to: "en" });
+    return result.text;
+  } catch (error) {
+    return text;
+  }
+}
 
 function getUserFriendlyError(error) {
   const errorMessage = error.message || error.toString();
@@ -155,19 +167,23 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
               imap.end();
 
-              const formattedEmails = sortedEmails.map((email) => {
+              const formattedEmails = await Promise.all(sortedEmails.map(async (email) => {
                 const htmlContent = email.html || "";
+                const textContent = email.text || "";
+                
+                const translatedSubject = await translateToEnglish(email.subject || "Email");
+                const translatedText = await translateToEnglish(textContent);
                 
                 return {
                   id: email.messageId || `${Date.now()}-${Math.random()}`,
-                  subject: email.subject || "Netflix Email",
+                  subject: translatedSubject,
                   receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
                   from: email.from?.text || "",
                   to: email.to?.text || "",
                   htmlContent: htmlContent,
-                  textContent: email.text || "",
+                  textContent: translatedText,
                 };
-              });
+              }));
 
               resolve(formattedEmails);
             } catch (parseError) {
