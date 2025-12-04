@@ -126,68 +126,9 @@ function isMainActionLink(url) {
 }
 
 async function processContentWithLinks(html, text) {
-  const categorizedLinks = {
-    getCode: [],
-    resetPassword: [],
-    manageDevices: [],
-    yesItWasMe: [],
-    notMe: [],
-    other: []
-  };
   const seenUrls = new Set();
-  
-  if (html) {
-    const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
-    let hrefMatch;
-    
-    while ((hrefMatch = hrefRegex.exec(html)) !== null) {
-      let url = hrefMatch[1];
-      url = url.replace(/&amp;/g, "&");
-      const urlLower = url.toLowerCase();
-      
-      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms") || urlLower.includes("legal")) {
-        continue;
-      }
-      
-      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
-      
-      if (!seenUrls.has(urlLower) && isNetflixUrl) {
-        seenUrls.add(urlLower);
-        
-        if (isMainActionLink(urlLower)) {
-          const label = getLinkLabel(urlLower);
-          const category = categorizeLinkType(urlLower);
-          categorizedLinks[category].push({ type: "link", label, url, isMain: true, category });
-        }
-      }
-    }
-  }
-  
-  let content = text || "";
-  
-  if (!content && html) {
-    content = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-    content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-    content = content.replace(/<a[^>]*>([^<]*)<\/a>/gi, "$1");
-    content = content.replace(/<br\s*\/?>/gi, "\n");
-    content = content.replace(/<\/p>/gi, "\n\n");
-    content = content.replace(/<\/div>/gi, "\n");
-    content = content.replace(/<\/tr>/gi, "\n");
-    content = content.replace(/<[^>]+>/g, " ");
-    content = content.replace(/&nbsp;/gi, " ");
-    content = content.replace(/&amp;/gi, "&");
-    content = content.replace(/&lt;/gi, "<");
-    content = content.replace(/&gt;/gi, ">");
-    content = content.replace(/&quot;/gi, '"');
-    content = content.replace(/&#39;/gi, "'");
-    content = content.replace(/&#x27;/gi, "'");
-    content = content.replace(/&#\d+;/gi, "");
-  }
-  
-  content = content.replace(/https?:\/\/[^\s]+/gi, "");
-  content = content.replace(/[ \t]+/g, " ");
-  content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
-  content = content.trim();
+  const linkPlaceholders = [];
+  let placeholderIndex = 0;
   
   const footerPatterns = [
     /we're here to help/i,
@@ -215,11 +156,68 @@ async function processContentWithLinks(html, text) {
     /do you have any questions/i,
   ];
   
+  let processedHtml = html || "";
+  
+  if (processedHtml) {
+    processedHtml = processedHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    processedHtml = processedHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    
+    const linkRegex = /<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+    
+    processedHtml = processedHtml.replace(linkRegex, (match, url, linkText) => {
+      url = url.replace(/&amp;/g, "&");
+      const urlLower = url.toLowerCase();
+      
+      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms") || urlLower.includes("legal")) {
+        return linkText;
+      }
+      
+      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
+      
+      if (isNetflixUrl && isMainActionLink(urlLower) && !seenUrls.has(urlLower)) {
+        seenUrls.add(urlLower);
+        const label = getLinkLabel(urlLower);
+        const category = categorizeLinkType(urlLower);
+        const placeholder = `___LINK_PLACEHOLDER_${placeholderIndex}___`;
+        linkPlaceholders.push({
+          placeholder,
+          link: { type: "link", label, url, isMain: true, category }
+        });
+        placeholderIndex++;
+        return `\n${placeholder}\n`;
+      }
+      
+      return linkText;
+    });
+    
+    processedHtml = processedHtml.replace(/<br\s*\/?>/gi, "\n");
+    processedHtml = processedHtml.replace(/<\/p>/gi, "\n\n");
+    processedHtml = processedHtml.replace(/<\/div>/gi, "\n");
+    processedHtml = processedHtml.replace(/<\/tr>/gi, "\n");
+    processedHtml = processedHtml.replace(/<[^>]+>/g, " ");
+    processedHtml = processedHtml.replace(/&nbsp;/gi, " ");
+    processedHtml = processedHtml.replace(/&amp;/gi, "&");
+    processedHtml = processedHtml.replace(/&lt;/gi, "<");
+    processedHtml = processedHtml.replace(/&gt;/gi, ">");
+    processedHtml = processedHtml.replace(/&quot;/gi, '"');
+    processedHtml = processedHtml.replace(/&#39;/gi, "'");
+    processedHtml = processedHtml.replace(/&#x27;/gi, "'");
+    processedHtml = processedHtml.replace(/&#\d+;/gi, "");
+  }
+  
+  let content = processedHtml || text || "";
+  
+  content = content.replace(/https?:\/\/[^\s]+/gi, "");
+  content = content.replace(/[ \t]+/g, " ");
+  content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
+  content = content.trim();
+  
   const lines = content.split('\n');
   let cutoffIndex = lines.length;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].toLowerCase();
+    if (line.includes("___link_placeholder_")) continue;
     for (const pattern of footerPatterns) {
       if (pattern.test(line)) {
         cutoffIndex = i;
@@ -239,25 +237,48 @@ async function processContentWithLinks(html, text) {
   
   const segments = [];
   
-  const getCodeLinks = [...categorizedLinks.getCode, ...categorizedLinks.yesItWasMe, ...categorizedLinks.notMe];
-  const manageDevicesLinks = categorizedLinks.manageDevices;
-  const passwordLinks = categorizedLinks.resetPassword;
-  
-  if (cleanedContent) {
-    const translated = await translateToEnglish(cleanedContent);
-    segments.push({ type: "text", value: translated });
+  if (linkPlaceholders.length === 0) {
+    if (cleanedContent) {
+      const translated = await translateToEnglish(cleanedContent);
+      segments.push({ type: "text", value: translated });
+    }
+    return segments;
   }
   
-  if (getCodeLinks.length > 0) {
-    segments.push({ type: "buttons", buttons: getCodeLinks });
+  const placeholderRegex = /___LINK_PLACEHOLDER_(\d+)___/g;
+  let lastIndex = 0;
+  let match;
+  const contentParts = [];
+  
+  while ((match = placeholderRegex.exec(cleanedContent)) !== null) {
+    if (match.index > lastIndex) {
+      const textBefore = cleanedContent.slice(lastIndex, match.index).trim();
+      if (textBefore) {
+        contentParts.push({ type: "text", value: textBefore });
+      }
+    }
+    const linkIndex = parseInt(match[1], 10);
+    const linkData = linkPlaceholders.find(p => p.placeholder === match[0]);
+    if (linkData) {
+      contentParts.push({ type: "button", link: linkData.link });
+    }
+    lastIndex = match.index + match[0].length;
   }
   
-  if (manageDevicesLinks.length > 0) {
-    segments.push({ type: "buttons", buttons: manageDevicesLinks });
+  if (lastIndex < cleanedContent.length) {
+    const textAfter = cleanedContent.slice(lastIndex).trim();
+    if (textAfter) {
+      contentParts.push({ type: "text", value: textAfter });
+    }
   }
   
-  if (passwordLinks.length > 0) {
-    segments.push({ type: "buttons", buttons: passwordLinks });
+  for (const part of contentParts) {
+    if (part.type === "text") {
+      const translated = await translateToEnglish(part.value);
+      segments.push({ type: "text", value: translated });
+    } else if (part.type === "button") {
+      segments.push({ type: "buttons", buttons: [part.link] });
+    }
   }
   
   return segments;
