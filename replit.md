@@ -128,40 +128,40 @@ The application includes dependencies for PostgreSQL integration:
 
 These are configured but not currently utilized by the core email lookup functionality. They provide infrastructure for future features like code history, user accounts, or analytics.
 
-## Vercel Deployment
+## Deployment
 
-The application is configured for Vercel deployment with:
-- **vercel.json**: Configuration file for Vercel deployment
-- **api/findcode.js**: Serverless function for the API endpoint
+### Vercel Limitations
+
+**Important**: IMAP requires long-lived sockets that are incompatible with Vercel serverless functions. The `api/findcode.js` file is provided for reference but will not work on Vercel's serverless infrastructure.
+
+**Recommended Deployment Options**:
+- **Replit Deployments**: Use Replit's built-in deployment (recommended)
+- **Traditional VPS**: Deploy to a server that supports persistent connections (Railway, Render, DigitalOcean, etc.)
+- **Container Hosting**: Docker-based deployment on any container platform
+
+The application is configured with:
+- **vercel.json**: Static file serving configuration only
 - **Build Output**: Static frontend built to `dist/public`
 
-### Deployment Steps for Vercel:
-1. Connect the repository to Vercel
-2. Set the following environment variables in Vercel dashboard:
-   - `EMAIL_ADDRESS`: Admin email address for IMAP connection
-   - `EMAIL_PASSWORD`: App password for the email account
-   - `EMAIL_SERVER`: IMAP server (default: imap.gmail.com)
-   - `EMAIL_PORT`: IMAP port (default: 993)
-   - `EMAIL_TLS`: Enable TLS (default: true)
-3. Deploy - Vercel will automatically build and deploy
+For production deployment, use the Express server which properly handles IMAP connections.
 
 ## Recent Changes
 
+- **Email Display Preservation (Dec 2025)**: Fixed translateHtmlContent function to preserve original Netflix email layout:
+  - Only removes script tags, keeps all inline styles and structure intact
+  - White text color only applied to "Yes, it's me" URLs (yesitwasme variants) and "Get Code" URLs (containing both 'travel' AND 'temporary')
+  - Removed footer-stripping regexes that were breaking the original email layout
+  - Emails now display with their original light/white background as Netflix intended
+- **Vercel Compatibility Update (Dec 2025)**: Removed Vercel serverless function configuration since IMAP requires long-lived sockets incompatible with serverless architecture
 - **Security Hardening (Dec 2025)**: Implemented comprehensive security measures:
   - **URL Sanitization**: Strict allowlist of Netflix domains (netflix.com, nflxso.net and subdomains)
   - **Protocol Validation**: Only allows http/https protocols, blocks javascript:, data:, vbscript:
   - **Encoded Payload Detection**: Decodes URLs to catch encoded dangerous patterns
   - **HTML Escaping**: All dynamic content is escaped using `escapeHtml()` function before rendering
   - **Link Filtering**: Non-Netflix links are dropped and only their text content is shown
-- **Email Display Fix (Dec 2025)**: Fixed bug where raw CSS was displayed as text instead of properly rendered content
-- **Simplified Email Filtering (Dec 2025)**: Rewrote email filtering to use a simpler, more reliable approach matching the Telegram bot pattern:
+- **Simplified Email Filtering (Dec 2025)**: Rewrote email filtering to use a simpler, more reliable approach:
   1. Check translated subject for keywords: "temporary" or "household"
   2. Check email body for Netflix account links (`netflix.com/account`)
   3. Both conditions must be true for a match
-- **Inline Button Placement (Dec 2025)**: Action buttons now appear inline where links originally existed in email content, using placeholder-based segmentation
-- **Vercel API Fix (Dec 2025)**: Fixed `api/findcode.js` to return the same `{ emails: [...], totalCount: ... }` format as the Express backend
-- **Link Display Improvement (Dec 2025)**: Links display with labels like "Go to Account" or "Open Netflix" that open in new tabs
-- **Access Code Display**: Added prominent display of 4-digit access codes when found in emails
 - **Translation Feature**: Email subjects are automatically translated to English using the translatte library
 - **Production Ready**: All console.log statements removed for production deployment
-- **Vercel Ready**: Added Vercel configuration and serverless API function
