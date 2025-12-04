@@ -526,6 +526,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 to: householdEmail.to?.text || "",
                 contentSegments: contentSegments,
                 accessCode: accessCode,
+                rawHtml: htmlContent,
               };
 
               resolve([formattedEmail]);

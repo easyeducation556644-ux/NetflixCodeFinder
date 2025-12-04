@@ -4,7 +4,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { Search, Mail, AlertCircle, Loader2 } from "lucide-react";
+import DOMPurify from "dompurify";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -121,16 +122,22 @@ function ContentSegments({ segments, emailId }) {
 }
 
 function EmailContent({ email, emailId }) {
-  const { contentSegments } = email;
+  const { rawHtml } = email;
+  
+  const sanitizedHtml = DOMPurify.sanitize(rawHtml || "", {
+    ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'a', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'img', 'ul', 'ol', 'li', 'hr'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'style', 'class', 'width', 'height'],
+  });
   
   return (
     <div 
       className="w-full"
       data-testid={`email-content-${emailId}`}
     >
-      <div className="bg-neutral-800 rounded-lg p-4">
-        <ContentSegments segments={contentSegments} emailId={emailId} />
-      </div>
+      <div 
+        className="email-content-wrapper bg-white text-black rounded-lg overflow-hidden"
+        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+      />
     </div>
   );
 }
@@ -218,7 +225,7 @@ export default function Home() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-neutral-400 text-sm">Email Address</FormLabel>
+                    <FormLabel className="text-white text-base font-bold">Enter Netflix Email</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />

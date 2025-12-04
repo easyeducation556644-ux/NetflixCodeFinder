@@ -473,6 +473,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   to: email.to?.text || "",
                   contentSegments: contentSegments,
                   accessCode: accessCode,
+                  rawHtml: htmlContent,
                 };
               }));
 
