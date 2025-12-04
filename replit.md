@@ -147,6 +147,9 @@ The application is configured for Vercel deployment with:
 
 ## Recent Changes
 
+- **Vercel API Fix (Dec 2025)**: Fixed `api/findcode.js` to return the same `{ emails: [...], totalCount: ... }` format as the Express backend, ensuring Vercel serverless deployment works correctly
+- **Link Display Improvement (Dec 2025)**: Updated frontend to show only clickable link labels instead of full email content. Links now display with labels like "Go to Account" or "Open Netflix" that open in new tabs
+- **Access Code Display**: Added prominent display of 4-digit access codes when found in emails
 - **Translation Feature**: Email subjects and content are now automatically translated to English using the translatte library
 - **Production Ready**: All console.log statements removed for production deployment
 - **Vercel Ready**: Added Vercel configuration and serverless API function
