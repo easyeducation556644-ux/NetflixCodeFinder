@@ -135,12 +135,7 @@ function EmailContent({ email, emailId }) {
       data-testid={`email-content-${emailId}`}
     >
       <div 
-        className="email-content-wrapper bg-white text-black rounded-xl overflow-x-auto p-4 sm:p-6"
-        style={{ 
-          maxWidth: '100%',
-          wordWrap: 'break-word',
-          overflowWrap: 'break-word'
-        }}
+        className="email-content-wrapper bg-neutral-800 text-neutral-100 rounded-xl overflow-hidden p-2 sm:p-4 md:p-6"
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
       {contentSegments && contentSegments.length > 0 && (
