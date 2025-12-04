@@ -20,20 +20,37 @@ function getLinkLabel(url) {
     return "Yes, It Was Me";
   } else if (urlLower.includes("notme") || urlLower.includes("not-me") || urlLower.includes("not_me") || urlLower.includes("wasntme")) {
     return "No, It Wasn't Me";
-  } else if (urlLower.includes("travel") || urlLower.includes("temporary-access")) {
-    return "Get Temporary Access Code";
+  } else if (urlLower.includes("travel") || urlLower.includes("temporary-access") || urlLower.includes("getcode") || urlLower.includes("get-code")) {
+    return "Get Code";
+  } else if (urlLower.includes("password") || urlLower.includes("reset")) {
+    return "Change Password";
+  } else if (urlLower.includes("device") || urlLower.includes("signout") || urlLower.includes("sign-out") || urlLower.includes("manage")) {
+    return "Manage Devices";
   } else if (urlLower.includes("verify") || urlLower.includes("confirm")) {
     return "Verify";
-  } else if (urlLower.includes("password") || urlLower.includes("reset")) {
-    return "Reset Password";
   } else if (urlLower.includes("loginhelp") || urlLower.includes("login-help")) {
     return "Login Help";
   } else if (urlLower.includes("/account")) {
     return "Go to Account";
-  } else if (urlLower.includes("/e/") || urlLower.includes("nflink")) {
-    return "Open Link";
   }
   return "Open Link";
+}
+
+function categorizeLinkType(url) {
+  const urlLower = url.toLowerCase();
+  
+  if (urlLower.includes("travel") || urlLower.includes("temporary") || urlLower.includes("getcode") || urlLower.includes("get-code")) {
+    return "getCode";
+  } else if (urlLower.includes("password") || urlLower.includes("reset")) {
+    return "resetPassword";
+  } else if (urlLower.includes("device") || urlLower.includes("signout") || urlLower.includes("sign-out") || urlLower.includes("manage") || urlLower.includes("/account")) {
+    return "manageDevices";
+  } else if (urlLower.includes("yesitwasme") || urlLower.includes("yes-it-was-me")) {
+    return "yesItWasMe";
+  } else if (urlLower.includes("notme") || urlLower.includes("not-me")) {
+    return "notMe";
+  }
+  return "other";
 }
 
 function isMainActionLink(url) {
@@ -109,7 +126,14 @@ function isMainActionLink(url) {
 }
 
 async function processContentWithLinks(html, text) {
-  const mainLinks = [];
+  const categorizedLinks = {
+    getCode: [],
+    resetPassword: [],
+    manageDevices: [],
+    yesItWasMe: [],
+    notMe: [],
+    other: []
+  };
   const seenUrls = new Set();
   
   if (html) {
@@ -121,7 +145,7 @@ async function processContentWithLinks(html, text) {
       url = url.replace(/&amp;/g, "&");
       const urlLower = url.toLowerCase();
       
-      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms")) {
+      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms") || urlLower.includes("legal")) {
         continue;
       }
       
@@ -132,7 +156,8 @@ async function processContentWithLinks(html, text) {
         
         if (isMainActionLink(urlLower)) {
           const label = getLinkLabel(urlLower);
-          mainLinks.push({ type: "link", label, url, isMain: true });
+          const category = categorizeLinkType(urlLower);
+          categorizedLinks[category].push({ type: "link", label, url, isMain: true, category });
         }
       }
     }
@@ -164,11 +189,60 @@ async function processContentWithLinks(html, text) {
   content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
   content = content.trim();
   
-  const segments = [...mainLinks];
+  const footerPatterns = [
+    /we're here to help/i,
+    /visit the help center/i,
+    /the netflix team/i,
+    /questions\?/i,
+    /this message was mailed to/i,
+    /this message was sent to/i,
+    /netflix international/i,
+    /notification settings/i,
+    /terms of use/i,
+    /privacy/i,
+    /help center netflix/i,
+    /netflix entretenimento/i,
+    /src:/i,
+  ];
   
-  if (content) {
-    const translated = await translateToEnglish(content);
+  const lines = content.split('\n');
+  let cutoffIndex = lines.length;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toLowerCase();
+    for (const pattern of footerPatterns) {
+      if (pattern.test(line)) {
+        cutoffIndex = i;
+        break;
+      }
+    }
+    if (cutoffIndex !== lines.length) break;
+  }
+  
+  const cleanedLines = lines.slice(0, cutoffIndex).filter(line => line.trim());
+  const cleanedContent = cleanedLines.join('\n').trim();
+  
+  const segments = [];
+  
+  const getCodeLinks = [...categorizedLinks.getCode, ...categorizedLinks.yesItWasMe, ...categorizedLinks.notMe];
+  const manageDevicesLinks = categorizedLinks.manageDevices;
+  const passwordLinks = categorizedLinks.resetPassword;
+  
+  if (cleanedContent) {
+    const translated = await translateToEnglish(cleanedContent);
     segments.push({ type: "text", value: translated });
+  }
+  
+  if (getCodeLinks.length > 0) {
+    segments.push({ type: "buttons", buttons: getCodeLinks });
+  }
+  
+  if (manageDevicesLinks.length > 0) {
+    segments.push({ type: "buttons", buttons: manageDevicesLinks });
+  }
+  
+  if (passwordLinks.length > 0) {
+    segments.push({ type: "buttons", buttons: passwordLinks });
   }
   
   return segments;

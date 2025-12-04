@@ -24,50 +24,58 @@ function ContentSegments({ segments, emailId }) {
     );
   }
 
-  const mainLinks = segments.filter(s => s.type === "link" && s.isMain);
-  const textSegments = segments.filter(s => s.type === "text");
-  
-  const fullText = textSegments.map(s => s.value).join(" ");
-  
-  const lines = fullText.split('\n').filter(line => line.trim());
-  const halfIndex = Math.ceil(lines.length / 2);
-  const firstHalf = lines.slice(0, Math.min(halfIndex, 5)).join('\n');
-  const secondHalf = lines.slice(Math.min(halfIndex, 5)).join('\n');
-
   return (
     <div 
-      className="space-y-4"
+      className="space-y-3"
       data-testid={`content-${emailId}`}
     >
-      {firstHalf && (
-        <div className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">
-          {firstHalf}
-        </div>
-      )}
-      
-      {mainLinks.length > 0 && (
-        <div className="flex flex-col gap-3 py-2">
-          {mainLinks.map((segment, index) => (
+      {segments.map((segment, index) => {
+        if (segment.type === "text") {
+          return (
+            <div key={index} className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">
+              {segment.value}
+            </div>
+          );
+        }
+        
+        if (segment.type === "buttons" && segment.buttons) {
+          return (
+            <div key={index} className="flex flex-col gap-2 py-1">
+              {segment.buttons.map((btn, btnIndex) => (
+                <a
+                  key={btnIndex}
+                  href={btn.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-neutral-700 hover:bg-neutral-600 text-white font-medium text-sm rounded-lg transition-colors border border-neutral-600"
+                  data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
+                >
+                  <span>{btn.label}</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ))}
+            </div>
+          );
+        }
+        
+        if (segment.type === "link" && segment.isMain) {
+          return (
             <a
               key={index}
               href={segment.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-primary hover:bg-red-700 text-white font-bold text-base rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+              className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-neutral-700 hover:bg-neutral-600 text-white font-medium text-sm rounded-lg transition-colors border border-neutral-600"
               data-testid={`button-main-link-${emailId}-${index}`}
             >
               <span>{segment.label}</span>
-              <ExternalLink className="w-5 h-5" />
+              <ExternalLink className="w-4 h-4" />
             </a>
-          ))}
-        </div>
-      )}
-      
-      {secondHalf && (
-        <div className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">
-          {secondHalf}
-        </div>
-      )}
+          );
+        }
+        
+        return null;
+      })}
     </div>
   );
 }
