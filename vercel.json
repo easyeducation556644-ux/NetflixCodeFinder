@@ -2,16 +2,7 @@
   "version": 2,
   "buildCommand": "npx vite build",
   "outputDirectory": "dist/public",
-  "functions": {
-    "api/findcode.js": {
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
-    {
-      "source": "/api/findcode",
-      "destination": "/api/findcode"
-    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"

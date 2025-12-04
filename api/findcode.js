@@ -116,25 +116,7 @@ async function translateHtmlContentPreserveOriginal(html) {
   if (!html || html.trim() === "") return html;
   
   let processedHtml = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<\?xml[^>]*\?>/gi, '')
-    .replace(/<!DOCTYPE[^>]*>/gi, '');
-  
-  const footerPatterns = [
-    /<[^>]*>[\s\S]*?we're here to help[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?visit the help center[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?the netflix team[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?this message was sent to[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?this message was mailed to[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?netflix international[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?need help\?[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?questions\? visit[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?do you have any questions[\s\S]*$/i,
-  ];
-  
-  for (const pattern of footerPatterns) {
-    processedHtml = processedHtml.replace(pattern, '');
-  }
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
   
   const textToTranslate = [];
   let textIndex = 0;
@@ -175,12 +157,7 @@ async function translateHtmlContentPreserveOriginal(html) {
                        urlClean.includes('yes-it-was-me') ||
                        urlClean.includes('yes_it_was_me');
     
-    const isGetCode = urlClean.includes('getcode') || 
-                      urlClean.includes('get-code') ||
-                      urlClean.includes('get_code') ||
-                      urlClean.includes('travel') ||
-                      urlClean.includes('temporary-access') ||
-                      (urlClean.includes('/account') && !urlClean.includes('signout'));
+    const isGetCode = urlClean.includes('travel') && urlClean.includes('temporary');
     
     if (isYesItsMe || isGetCode) {
       let newAttrs = attrs;
@@ -197,7 +174,7 @@ async function translateHtmlContentPreserveOriginal(html) {
     return `<a${attrs} target="_blank" rel="noopener noreferrer">`;
   });
   
-  const wrappedHtml = `<div class="netflix-email-original" style="font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;">${processedHtml}</div>`;
+  const wrappedHtml = `<div class="netflix-email-original">${processedHtml}</div>`;
   
   return wrappedHtml;
 }

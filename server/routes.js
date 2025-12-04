@@ -125,34 +125,12 @@ function escapeHtml(text) {
 async function translateHtmlContent(html) {
   if (!html || html.trim() === "") return html;
   
-  // Step 1: Remove dangerous elements but keep the original email structure
   let processedHtml = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<\?xml[^>]*\?>/gi, '')
-    .replace(/<!DOCTYPE[^>]*>/gi, '');
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
   
-  // Step 2: Remove footer content from the HTML
-  const footerPatterns = [
-    /<[^>]*>[\s\S]*?we're here to help[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?visit the help center[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?the netflix team[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?this message was sent to[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?this message was mailed to[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?netflix international[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?need help\?[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?questions\? visit[\s\S]*$/i,
-    /<[^>]*>[\s\S]*?do you have any questions[\s\S]*$/i,
-  ];
-  
-  for (const pattern of footerPatterns) {
-    processedHtml = processedHtml.replace(pattern, '');
-  }
-  
-  // Step 3: Extract text content for translation while preserving structure
   const textToTranslate = [];
   let textIndex = 0;
   
-  // Replace text content with placeholders for translation
   processedHtml = processedHtml.replace(/>([^<]+)</g, (match, text) => {
     const trimmedText = text.trim();
     if (trimmedText && trimmedText.length > 1 && !/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"&nbsp;]+$/.test(trimmedText)) {
@@ -164,7 +142,6 @@ async function translateHtmlContent(html) {
     return match;
   });
   
-  // Step 4: Translate all text content
   for (const item of textToTranslate) {
     try {
       const translated = await translateToEnglish(item.text);
@@ -174,12 +151,10 @@ async function translateHtmlContent(html) {
     }
   }
   
-  // Step 5: Replace placeholders with translated text
   for (const item of textToTranslate) {
     processedHtml = processedHtml.replace(`>___TEXT_${item.index}___<`, `>${escapeHtml(item.translated)}<`);
   }
   
-  // Step 6: Process links - only add white text color to main action buttons (Yes Its Me, Get Code)
   processedHtml = processedHtml.replace(/<a([^>]*href\s*=\s*["']([^"']+)["'][^>]*)>/gi, (match, attrs, url) => {
     const urlClean = url.replace(/&amp;/g, '&').toLowerCase();
     const safeUrl = sanitizeUrl(url.replace(/&amp;/g, '&'));
@@ -188,25 +163,16 @@ async function translateHtmlContent(html) {
       return match;
     }
     
-    // Check if this is a main action button (Yes Its Me or Get Code)
     const isYesItsMe = urlClean.includes('yesitwasme') || 
                        urlClean.includes('yes-it-was-me') ||
                        urlClean.includes('yes_it_was_me');
     
-    const isGetCode = urlClean.includes('getcode') || 
-                      urlClean.includes('get-code') ||
-                      urlClean.includes('get_code') ||
-                      urlClean.includes('travel') ||
-                      urlClean.includes('temporary-access') ||
-                      (urlClean.includes('/account') && !urlClean.includes('signout'));
+    const isGetCode = urlClean.includes('travel') && urlClean.includes('temporary');
     
-    // Only add white color to Yes Its Me and Get Code buttons
     if (isYesItsMe || isGetCode) {
-      // Add white text color and ensure button is clickable
       let newAttrs = attrs;
       if (attrs.includes('style=')) {
         newAttrs = attrs.replace(/style\s*=\s*["']([^"']*)["']/i, (m, styles) => {
-          // Add white color to existing styles
           return `style="${styles}; color: #ffffff !important;"`;
         });
       } else {
@@ -218,8 +184,7 @@ async function translateHtmlContent(html) {
     return `<a${attrs} target="_blank" rel="noopener noreferrer">`;
   });
   
-  // Step 7: Wrap in a container that preserves original styling (no dark background)
-  const wrappedHtml = `<div class="netflix-email-original" style="font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;">${processedHtml}</div>`;
+  const wrappedHtml = `<div class="netflix-email-original">${processedHtml}</div>`;
   
   return wrappedHtml;
 }
