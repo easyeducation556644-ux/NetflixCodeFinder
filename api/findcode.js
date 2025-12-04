@@ -141,12 +141,7 @@ function isHouseholdEmail(translatedSubject, htmlContent) {
     "temporary",
     "household", 
     "temp",
-    "home",
-    "update",
-    "important",
-    "core",
-    "access code",
-    "verification"
+    "home"
   ];
   const hasKeyword = subjectKeywords.some(kw => subject.includes(kw));
   
