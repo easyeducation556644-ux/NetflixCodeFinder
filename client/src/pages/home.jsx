@@ -39,63 +39,37 @@ function ContentSegments({ segments, emailId }) {
         }
         
         if (segment.type === "buttons" && segment.buttons) {
+          const validButtons = segment.buttons.filter(btn => 
+            btn.category !== "resetPassword" && 
+            btn.category !== "manageDevices" && 
+            btn.category !== "getCode"
+          );
+          
+          if (validButtons.length === 0) return null;
+          
           return (
             <div key={index} className="py-2 flex flex-wrap gap-2">
-              {segment.buttons.map((btn, btnIndex) => {
-                const isPlainLink = btn.category === "resetPassword" || btn.category === "manageDevices";
-                
-                if (isPlainLink) {
-                  return (
-                    <a
-                      key={btnIndex}
-                      href={btn.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-neutral-400 hover:text-white text-sm underline underline-offset-2 transition-colors"
-                      data-testid={`link-${btn.category || 'action'}-${emailId}-${btnIndex}`}
-                    >
-                      <span>{btn.label}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  );
-                }
-                
-                return (
-                  <a
-                    key={btnIndex}
-                    href={btn.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold text-base rounded-full shadow-lg shadow-red-900/30 hover:shadow-red-800/40 transition-all duration-200 hover:scale-105"
-                    data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
-                  >
-                    <span>{btn.label}</span>
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                );
-              })}
+              {validButtons.map((btn, btnIndex) => (
+                <a
+                  key={btnIndex}
+                  href={btn.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold text-base rounded-full shadow-lg shadow-red-900/30 hover:shadow-red-800/40 transition-all duration-200 hover:scale-105"
+                  data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
+                >
+                  <span>{btn.label}</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ))}
             </div>
           );
         }
         
         if (segment.type === "link" && segment.isMain) {
-          const isPlainLink = segment.category === "resetPassword" || segment.category === "manageDevices";
-          
-          if (isPlainLink) {
-            return (
-              <div key={index} className="py-2">
-                <a
-                  href={segment.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-neutral-400 hover:text-white text-sm underline underline-offset-2 transition-colors"
-                  data-testid={`link-main-${emailId}-${index}`}
-                >
-                  <span>{segment.label}</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            );
+          const skipCategories = ["resetPassword", "manageDevices", "getCode"];
+          if (skipCategories.includes(segment.category)) {
+            return null;
           }
           
           return (
