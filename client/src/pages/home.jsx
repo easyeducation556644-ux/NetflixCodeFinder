@@ -127,9 +127,10 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setResults(data);
+      const emailCount = data.emails?.length || data.totalCount || 0;
       toast({
         title: "Emails Found",
-        description: `Found ${data.totalCount} Netflix email(s) from the last 16 minutes.`,
+        description: `Found ${emailCount} Netflix email(s) from the last 16 minutes.`,
       });
     },
     onError: (error) => {
@@ -230,7 +231,7 @@ export default function Home() {
             >
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">
-                  Found <span className="text-primary font-semibold">{results.totalCount}</span> email(s) from the last 16 minutes
+                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> email(s) from the last 16 minutes
                 </p>
               </div>
 
