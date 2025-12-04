@@ -33,25 +33,25 @@ function ContentSegments({ segments, emailId }) {
       data-testid={`content-${emailId}`}
     >
       {mainLinks.length > 0 && (
-        <div className="flex flex-wrap gap-2 justify-center">
+        <div className="flex flex-col gap-3">
           {mainLinks.map((segment, index) => (
             <a
               key={index}
               href={segment.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-3 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors shadow-lg"
+              className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-primary hover:bg-red-700 text-white font-bold text-base rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
               data-testid={`button-main-link-${emailId}-${index}`}
             >
               <span>{segment.label}</span>
-              <ExternalLink className="w-4 h-4" />
+              <ExternalLink className="w-5 h-5" />
             </a>
           ))}
         </div>
       )}
       
       {textSegments.length > 0 && (
-        <div className="text-neutral-200 text-sm leading-relaxed text-justify">
+        <div className="text-neutral-300 text-sm leading-relaxed">
           {textSegments.map((segment, index) => (
             <span key={index} className="whitespace-pre-wrap">
               {segment.value}{" "}

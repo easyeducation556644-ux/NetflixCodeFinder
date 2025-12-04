@@ -82,15 +82,47 @@ function isMainActionLink(url) {
 }
 
 async function processContentWithLinks(html, text) {
-  const segments = [];
+  const mainLinks = [];
+  const seenUrls = new Set();
+  
+  if (html) {
+    const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+    let linkMatch;
+    
+    while ((linkMatch = linkRegex.exec(html)) !== null) {
+      let url = linkMatch[1];
+      const linkText = linkMatch[2].trim();
+      
+      url = url.replace(/&amp;/g, "&");
+      
+      if (url.includes("unsubscribe") || url.includes("mailto:") || url.includes("help.netflix")) {
+        continue;
+      }
+      
+      if (!seenUrls.has(url) && url.includes("netflix")) {
+        seenUrls.add(url);
+        const isMain = isMainActionLink(url);
+        if (isMain) {
+          let label = getLinkLabel(url);
+          if (linkText && linkText.length > 0 && linkText.length < 50) {
+            label = linkText.replace(/\s+/g, ' ').trim();
+          }
+          mainLinks.push({ type: "link", label, url, isMain: true });
+        }
+      }
+    }
+  }
+  
   let content = text || "";
   
-  if (html && !content) {
+  if (!content && html) {
     content = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
     content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    content = content.replace(/<a[^>]*>([^<]*)<\/a>/gi, "$1");
     content = content.replace(/<br\s*\/?>/gi, "\n");
     content = content.replace(/<\/p>/gi, "\n\n");
     content = content.replace(/<\/div>/gi, "\n");
+    content = content.replace(/<\/tr>/gi, "\n");
     content = content.replace(/<[^>]+>/g, " ");
     content = content.replace(/&nbsp;/gi, " ");
     content = content.replace(/&amp;/gi, "&");
@@ -102,60 +134,19 @@ async function processContentWithLinks(html, text) {
     content = content.replace(/&#\d+;/gi, "");
   }
   
+  content = content.replace(/https?:\/\/[^\s]+/gi, "");
   content = content.replace(/[ \t]+/g, " ");
   content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
   content = content.trim();
   
-  const urlRegex = /\[?(https?:\/\/[^\s\[\]<>"']+)\]?/gi;
-  let lastIndex = 0;
-  let match;
+  const segments = [...mainLinks];
   
-  const seenUrls = new Set();
-  
-  while ((match = urlRegex.exec(content)) !== null) {
-    const url = match[1].replace(/['">\].,;:]+$/, "");
-    
-    if (url.includes("unsubscribe") || url.includes("mailto:")) {
-      continue;
-    }
-    
-    if (match.index > lastIndex) {
-      const textBefore = content.slice(lastIndex, match.index).trim();
-      if (textBefore) {
-        segments.push({ type: "text", value: textBefore });
-      }
-    }
-    
-    if (!seenUrls.has(url)) {
-      seenUrls.add(url);
-      const label = getLinkLabel(url);
-      const isMain = isMainActionLink(url);
-      segments.push({ type: "link", label, url, isMain });
-    }
-    
-    lastIndex = match.index + match[0].length;
+  if (content) {
+    const translated = await translateToEnglish(content);
+    segments.push({ type: "text", value: translated });
   }
   
-  if (lastIndex < content.length) {
-    const remainingText = content.slice(lastIndex).trim();
-    if (remainingText) {
-      segments.push({ type: "text", value: remainingText });
-    }
-  }
-  
-  const translatedSegments = await Promise.all(
-    segments.map(async (segment) => {
-      if (segment.type === "text") {
-        const translated = await translateToEnglish(segment.value);
-        return { type: "text", value: translated };
-      } else if (segment.type === "link") {
-        return segment;
-      }
-      return segment;
-    })
-  );
-  
-  return translatedSegments;
+  return segments;
 }
 
 function extractAccessCode(content) {
