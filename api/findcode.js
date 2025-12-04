@@ -13,7 +13,7 @@ async function translateToEnglish(text) {
   }
 }
 
-function extractLinks(html, text) {
+async function extractLinks(html, text) {
   const links = [];
   
   if (html) {
@@ -22,6 +22,8 @@ function extractLinks(html, text) {
     while ((match = anchorRegex.exec(html)) !== null) {
       const url = match[1];
       let label = match[2].trim();
+      
+      label = label.replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
       
       if (!label) {
         if (url.includes("netflix.com/account")) {
@@ -67,7 +69,14 @@ function extractLinks(html, text) {
     }
   }
   
-  return uniqueLinks.slice(0, 5);
+  const translatedLinks = await Promise.all(
+    uniqueLinks.slice(0, 5).map(async (link) => {
+      const translatedLabel = await translateToEnglish(link.label);
+      return { url: link.url, label: translatedLabel };
+    })
+  );
+  
+  return translatedLinks;
 }
 
 function extractAccessCode(content) {
