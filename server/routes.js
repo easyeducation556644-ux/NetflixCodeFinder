@@ -44,6 +44,108 @@ async function translateToEnglish(text) {
   }
 }
 
+async function translateHtmlContent(html) {
+  if (!html || html.trim() === "") return html;
+  
+  const styleScriptBlocks = [];
+  let blockIndex = 0;
+  
+  let safeHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, (match) => {
+    const placeholder = `___STYLE_BLOCK_${blockIndex}___`;
+    styleScriptBlocks.push({ placeholder, content: match });
+    blockIndex++;
+    return placeholder;
+  });
+  
+  safeHtml = safeHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, (match) => {
+    const placeholder = `___SCRIPT_BLOCK_${blockIndex}___`;
+    styleScriptBlocks.push({ placeholder, content: match });
+    blockIndex++;
+    return placeholder;
+  });
+  
+  const textEntries = [];
+  let entryIndex = 0;
+  
+  safeHtml = safeHtml.replace(/>([^<]+)</g, (match, text) => {
+    const cleanText = text.replace(/\s+/g, ' ').trim();
+    
+    if (cleanText.length > 1 && 
+        !/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"]+$/.test(cleanText) &&
+        !cleanText.includes('___STYLE_BLOCK_') &&
+        !cleanText.includes('___SCRIPT_BLOCK_') &&
+        !/^https?:\/\//.test(cleanText) &&
+        !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanText)) {
+      const placeholder = `___TEXT_${entryIndex}___`;
+      textEntries.push({
+        placeholder,
+        originalText: text,
+        cleanText
+      });
+      entryIndex++;
+      return `>${placeholder}<`;
+    }
+    return match;
+  });
+  
+  safeHtml = safeHtml.replace(/alt\s*=\s*["']([^"']+)["']/gi, (match, text) => {
+    const cleanText = text.trim();
+    if (cleanText.length > 1 && !/^[\s\d\W]+$/.test(cleanText)) {
+      const placeholder = `___ALT_${entryIndex}___`;
+      textEntries.push({
+        placeholder,
+        originalText: text,
+        cleanText,
+        isAlt: true
+      });
+      entryIndex++;
+      return `alt="${placeholder}"`;
+    }
+    return match;
+  });
+  
+  if (textEntries.length === 0) {
+    for (const block of styleScriptBlocks) {
+      safeHtml = safeHtml.replace(block.placeholder, block.content);
+    }
+    return safeHtml;
+  }
+  
+  console.log(`Found ${textEntries.length} text entries to translate`);
+  
+  const textsToTranslate = textEntries.map(e => e.cleanText);
+  const translatedTexts = [];
+  
+  for (const text of textsToTranslate) {
+    try {
+      const result = await translatte(text, { to: 'en' });
+      translatedTexts.push(result.text || text);
+    } catch (e) {
+      console.error("Translation error for text:", text.substring(0, 50), e.message);
+      translatedTexts.push(text);
+    }
+  }
+  
+  console.log(`Translated ${translatedTexts.length} texts`);
+  
+  for (let i = 0; i < textEntries.length; i++) {
+    const entry = textEntries[i];
+    const translated = translatedTexts[i] || entry.cleanText;
+    
+    if (entry.isAlt) {
+      safeHtml = safeHtml.replace(entry.placeholder, translated);
+    } else {
+      safeHtml = safeHtml.replace(entry.placeholder, translated);
+    }
+  }
+  
+  for (const block of styleScriptBlocks) {
+    safeHtml = safeHtml.replace(block.placeholder, block.content);
+  }
+  
+  return safeHtml;
+}
+
 function getLinkLabel(url) {
   const urlLower = url.toLowerCase();
   
@@ -551,65 +653,10 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               let translatedHtml = htmlContent;
               try {
-                const textOnly = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                if (textOnly.length > 0 && textOnly.length < 15000) {
-                  const translatedText = await translateToEnglish(textOnly);
-                  const paragraphs = translatedText.split(/\n+/).filter(p => p.trim());
-                  
-                  let mainButtonHtml = '';
-                  let deviceInfoHtml = '';
-                  
-                  for (const seg of contentSegments) {
-                    if (seg.type === 'buttons' && seg.buttons) {
-                      for (const btn of seg.buttons) {
-                        if (btn.category === 'yesItWasMe') {
-                          mainButtonHtml = `
-                            <a href="${btn.url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 15px;">
-                              ${btn.label}
-                            </a>`;
-                          break;
-                        }
-                      }
-                    }
-                  }
-                  
-                  const deviceMatch = translatedText.match(/request.*?from.*?device.*?(\w+.*?stick|\w+.*?tv|\w+.*?phone|\w+.*?tablet)/i);
-                  const dateMatch = translatedText.match(/(\w+\s+\d+,?\s*\d*|\d+\s+\w+,?\s*\d*)/i);
-                  
-                  if (deviceMatch || dateMatch) {
-                    deviceInfoHtml = `
-                      <div style="background-color: #ffffff; border-radius: 8px; padding: 16px 20px; margin: 20px 0; display: flex; align-items: flex-start; gap: 16px;">
-                        <div style="width: 40px; height: 40px; background-color: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                          <span style="font-size: 20px;">📺</span>
-                        </div>
-                        <div style="flex: 1; color: #333333; font-size: 14px; line-height: 1.5;">
-                          <div>Request sent from device</div>
-                          <div style="font-weight: bold; margin: 4px 0;">${deviceMatch ? deviceMatch[1] : 'Streaming Device'}</div>
-                          <div style="color: #666666;">${dateMatch ? dateMatch[1] : ''}</div>
-                        </div>
-                      </div>
-                      <div style="text-align: center; margin: 20px 0;">
-                        ${mainButtonHtml}
-                      </div>
-                      <p style="color: #999999; font-size: 13px; margin-top: 16px;">* The link expires after 15 minutes.</p>
-                    `;
-                  }
-                  
-                  const bodyParagraphs = paragraphs.slice(0, Math.min(4, paragraphs.length));
-                  
-                  translatedHtml = `
-                    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; background-color: #000000; color: #ffffff; padding: 0;">
-                      <div style="padding: 20px;">
-                        <h1 style="color: #ffffff; font-size: 28px; font-weight: bold; margin: 0 0 20px 0; line-height: 1.3;">
-                          Do you want to update your Netflix Household?
-                        </h1>
-                        ${bodyParagraphs.map(p => `<p style="margin: 0 0 16px 0; color: #ffffff; font-size: 15px; line-height: 1.6;">${p}</p>`).join('')}
-                        ${deviceInfoHtml || (mainButtonHtml ? `<div style="text-align: center; margin: 24px 0;">${mainButtonHtml}</div>` : '')}
-                      </div>
-                    </div>`;
-                }
+                translatedHtml = await translateHtmlContent(htmlContent);
               } catch (e) {
-                console.log("Translation error:", e);
+                console.log("HTML Translation error:", e);
+                translatedHtml = htmlContent;
               }
               
               const formattedEmail = {
