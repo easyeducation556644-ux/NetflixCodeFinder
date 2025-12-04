@@ -125,69 +125,138 @@ function isMainActionLink(url) {
   return false;
 }
 
-async function processContentWithLinks(html, text) {
-  const categorizedLinks = {
-    getCode: [],
-    resetPassword: [],
-    manageDevices: [],
-    yesItWasMe: [],
-    notMe: [],
-    other: []
-  };
-  const seenUrls = new Set();
+function extractUrlsFromHtml(html) {
+  const urls = [];
+  const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
+  let match;
+  while ((match = hrefRegex.exec(html)) !== null) {
+    urls.push(match[1].replace(/&amp;/g, "&").toLowerCase());
+  }
+  return urls;
+}
+
+function isHouseholdEmailByUrls(htmlContent) {
+  const urls = extractUrlsFromHtml(htmlContent);
   
-  if (html) {
-    const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
-    let hrefMatch;
-    
-    while ((hrefMatch = hrefRegex.exec(html)) !== null) {
-      let url = hrefMatch[1];
-      url = url.replace(/&amp;/g, "&");
-      const urlLower = url.toLowerCase();
-      
-      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms") || urlLower.includes("legal")) {
-        continue;
-      }
-      
-      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
-      
-      if (!seenUrls.has(urlLower) && isNetflixUrl) {
-        seenUrls.add(urlLower);
-        
-        if (isMainActionLink(urlLower)) {
-          const label = getLinkLabel(urlLower);
-          const category = categorizeLinkType(urlLower);
-          categorizedLinks[category].push({ type: "link", label, url, isMain: true, category });
+  const householdUrlPatterns = [
+    'travel',
+    'temporary',
+    'getcode',
+    'get-code',
+    'get_code',
+    'account/travel',
+    'accountaccess',
+    'tempaccess',
+    'temp-access',
+  ];
+  
+  const excludeUrlPatterns = [
+    'password',
+    'reset',
+    'signin',
+    'sign-in',
+    'login',
+    'browse',
+    'watch',
+    'title',
+    'tudum',
+    'help.netflix',
+    'unsubscribe',
+    'notification',
+    'privacy',
+    'terms',
+    'legal',
+  ];
+  
+  for (const url of urls) {
+    if (url.includes('netflix.com') || url.includes('nflx')) {
+      for (const pattern of householdUrlPatterns) {
+        if (url.includes(pattern)) {
+          let isExcluded = false;
+          for (const excludePattern of excludeUrlPatterns) {
+            if (url.includes(excludePattern)) {
+              isExcluded = true;
+              break;
+            }
+          }
+          if (!isExcluded) {
+            return true;
+          }
         }
       }
     }
   }
   
-  let content = text || "";
+  return false;
+}
+
+function normalizeText(text) {
+  return (text || "")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
+function isHouseholdEmailByContent(translatedText) {
+  const content = normalizeText(translatedText);
   
-  if (!content && html) {
-    content = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-    content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-    content = content.replace(/<a[^>]*>([^<]*)<\/a>/gi, "$1");
-    content = content.replace(/<br\s*\/?>/gi, "\n");
-    content = content.replace(/<\/p>/gi, "\n\n");
-    content = content.replace(/<\/div>/gi, "\n");
-    content = content.replace(/<\/tr>/gi, "\n");
-    content = content.replace(/<[^>]+>/g, " ");
-    content = content.replace(/&nbsp;/gi, " ");
-    content = content.replace(/&amp;/gi, "&");
-    content = content.replace(/&lt;/gi, "<");
-    content = content.replace(/&gt;/gi, ">");
-    content = content.replace(/&quot;/gi, '"');
-    content = content.replace(/&#39;/gi, "'");
-    content = content.replace(/&#x27;/gi, "'");
-    content = content.replace(/&#\d+;/gi, "");
+  const excludePatterns = [
+    /\bpassword\b/i,
+    /\breset\b/i,
+    /\bnew\s*device\b/i,
+    /\bsomeone\s*(is\s*)?(using|else)\b/i,
+    /\bchange\s*(your\s*)?password\b/i,
+    /\bprotect\s*(your\s*)?account\b/i,
+    /\bsigned?\s*in\b/i,
+    /\bverify\b/i,
+    /\bconfirm\b/i,
+    /\bpayment\b/i,
+    /\bbilling\b/i,
+    /\bsubscription\b/i,
+    /\brenewal\b/i,
+    /\bprofile\b/i,
+    /\bnewsletter\b/i,
+    /\bwhat\s*to\s*watch\b/i,
+    /\brecommendation\b/i,
+    /\busing\s*your\s*account\b/i,
+    /\bcore\s*domestic\b/i,
+    /\bcore\s*home\b/i,
+  ];
+  
+  for (const pattern of excludePatterns) {
+    if (pattern.test(content)) {
+      return false;
+    }
   }
   
-  content = content.replace(/https?:\/\/[^\s]+/gi, "");
-  content = content.replace(/[ \t]+/g, " ");
-  content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
-  content = content.trim();
+  const householdPatterns = [
+    /\bhousehold\b/i,
+    /\btemporary\s*access\b/i,
+    /\btemporary\s*code\b/i,
+    /\btravel(ing|er)?\b/i,
+    /\baway\s*from\s*home\b/i,
+    /\bget\s*(a\s*)?code\b/i,
+    /\baccess\s*code\b/i,
+    /\btemporary\s*member\b/i,
+    /\bwatch(ing)?\s*(away|outside|somewhere)\b/i,
+  ];
+  
+  for (const pattern of householdPatterns) {
+    if (pattern.test(content)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+async function processContentWithLinks(html, text) {
+  const seenUrls = new Set();
+  const linkPlaceholders = [];
+  let placeholderIndex = 0;
   
   const footerPatterns = [
     /we're here to help/i,
@@ -215,11 +284,70 @@ async function processContentWithLinks(html, text) {
     /do you have any questions/i,
   ];
   
+  let processedHtml = html || "";
+  
+  if (processedHtml) {
+    processedHtml = processedHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    processedHtml = processedHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    
+    const linkRegex = /<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    
+    processedHtml = processedHtml.replace(linkRegex, (match, url, linkContent) => {
+      url = url.replace(/&amp;/g, "&");
+      const urlLower = url.toLowerCase();
+      
+      const plainText = linkContent.replace(/<[^>]+>/g, '').trim();
+      
+      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms") || urlLower.includes("legal")) {
+        return plainText;
+      }
+      
+      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
+      
+      if (isNetflixUrl && isMainActionLink(urlLower) && !seenUrls.has(urlLower)) {
+        seenUrls.add(urlLower);
+        const label = getLinkLabel(urlLower);
+        const category = categorizeLinkType(urlLower);
+        const placeholder = `___LINK_PLACEHOLDER_${placeholderIndex}___`;
+        linkPlaceholders.push({
+          placeholder,
+          link: { type: "link", label, url, isMain: true, category }
+        });
+        placeholderIndex++;
+        return `\n${placeholder}\n`;
+      }
+      
+      return plainText;
+    });
+    
+    processedHtml = processedHtml.replace(/<br\s*\/?>/gi, "\n");
+    processedHtml = processedHtml.replace(/<\/p>/gi, "\n\n");
+    processedHtml = processedHtml.replace(/<\/div>/gi, "\n");
+    processedHtml = processedHtml.replace(/<\/tr>/gi, "\n");
+    processedHtml = processedHtml.replace(/<[^>]+>/g, " ");
+    processedHtml = processedHtml.replace(/&nbsp;/gi, " ");
+    processedHtml = processedHtml.replace(/&amp;/gi, "&");
+    processedHtml = processedHtml.replace(/&lt;/gi, "<");
+    processedHtml = processedHtml.replace(/&gt;/gi, ">");
+    processedHtml = processedHtml.replace(/&quot;/gi, '"');
+    processedHtml = processedHtml.replace(/&#39;/gi, "'");
+    processedHtml = processedHtml.replace(/&#x27;/gi, "'");
+    processedHtml = processedHtml.replace(/&#\d+;/gi, "");
+  }
+  
+  let content = processedHtml || text || "";
+  
+  content = content.replace(/https?:\/\/[^\s]+/gi, "");
+  content = content.replace(/[ \t]+/g, " ");
+  content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
+  content = content.trim();
+  
   const lines = content.split('\n');
   let cutoffIndex = lines.length;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].toLowerCase();
+    if (line.includes("___link_placeholder_")) continue;
     for (const pattern of footerPatterns) {
       if (pattern.test(line)) {
         cutoffIndex = i;
@@ -239,25 +367,48 @@ async function processContentWithLinks(html, text) {
   
   const segments = [];
   
-  const getCodeLinks = [...categorizedLinks.getCode, ...categorizedLinks.yesItWasMe, ...categorizedLinks.notMe];
-  const manageDevicesLinks = categorizedLinks.manageDevices;
-  const passwordLinks = categorizedLinks.resetPassword;
-  
-  if (cleanedContent) {
-    const translated = await translateToEnglish(cleanedContent);
-    segments.push({ type: "text", value: translated });
+  if (linkPlaceholders.length === 0) {
+    if (cleanedContent) {
+      const translated = await translateToEnglish(cleanedContent);
+      segments.push({ type: "text", value: translated });
+    }
+    return segments;
   }
   
-  if (getCodeLinks.length > 0) {
-    segments.push({ type: "buttons", buttons: getCodeLinks });
+  const placeholderRegex = /___LINK_PLACEHOLDER_(\d+)___/g;
+  let lastIndex = 0;
+  let match;
+  const contentParts = [];
+  
+  while ((match = placeholderRegex.exec(cleanedContent)) !== null) {
+    if (match.index > lastIndex) {
+      const textBefore = cleanedContent.slice(lastIndex, match.index).trim();
+      if (textBefore) {
+        contentParts.push({ type: "text", value: textBefore });
+      }
+    }
+    const linkIndex = parseInt(match[1], 10);
+    const linkData = linkPlaceholders.find(p => p.placeholder === match[0]);
+    if (linkData) {
+      contentParts.push({ type: "button", link: linkData.link });
+    }
+    lastIndex = match.index + match[0].length;
   }
   
-  if (manageDevicesLinks.length > 0) {
-    segments.push({ type: "buttons", buttons: manageDevicesLinks });
+  if (lastIndex < cleanedContent.length) {
+    const textAfter = cleanedContent.slice(lastIndex).trim();
+    if (textAfter) {
+      contentParts.push({ type: "text", value: textAfter });
+    }
   }
   
-  if (passwordLinks.length > 0) {
-    segments.push({ type: "buttons", buttons: passwordLinks });
+  for (const part of contentParts) {
+    if (part.type === "text") {
+      const translated = await translateToEnglish(part.value);
+      segments.push({ type: "text", value: translated });
+    } else if (part.type === "button") {
+      segments.push({ type: "buttons", buttons: [part.link] });
+    }
   }
   
   return segments;
@@ -382,12 +533,37 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 });
 
               const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
-              
-              const latestEmail = sortedEmails.length > 0 ? [sortedEmails[0]] : [];
 
               imap.end();
 
-              const formattedEmails = await Promise.all(latestEmail.map(async (email) => {
+              let householdEmail = null;
+              
+              for (const email of sortedEmails) {
+                const htmlContent = email.html || "";
+                
+                if (isHouseholdEmailByUrls(htmlContent)) {
+                  householdEmail = email;
+                  break;
+                }
+                
+                const subject = email.subject || "";
+                const textContent = email.text || "";
+                const combinedRaw = subject + " " + textContent + " " + htmlContent;
+                
+                const translatedContent = await translateToEnglish(combinedRaw);
+                
+                if (isHouseholdEmailByContent(translatedContent)) {
+                  householdEmail = email;
+                  break;
+                }
+              }
+
+              if (!householdEmail) {
+                resolve([]);
+                return;
+              }
+
+              const formattedEmails = await Promise.all([householdEmail].map(async (email) => {
                 const htmlContent = email.html || "";
                 const textContent = email.text || "";
                 const combinedContent = textContent + " " + htmlContent;

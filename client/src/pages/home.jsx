@@ -26,7 +26,7 @@ function ContentSegments({ segments, emailId }) {
 
   return (
     <div 
-      className="space-y-3"
+      className="space-y-2"
       data-testid={`content-${emailId}`}
     >
       {segments.map((segment, index) => {
@@ -40,14 +40,14 @@ function ContentSegments({ segments, emailId }) {
         
         if (segment.type === "buttons" && segment.buttons) {
           return (
-            <div key={index} className="flex flex-col gap-2 py-1">
+            <div key={index} className="py-2">
               {segment.buttons.map((btn, btnIndex) => (
                 <a
                   key={btnIndex}
                   href={btn.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-neutral-700 hover:bg-neutral-600 text-white font-medium text-sm rounded-lg transition-colors border border-neutral-600"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium text-sm rounded-lg transition-colors"
                   data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
                 >
                   <span>{btn.label}</span>
@@ -60,17 +60,18 @@ function ContentSegments({ segments, emailId }) {
         
         if (segment.type === "link" && segment.isMain) {
           return (
-            <a
-              key={index}
-              href={segment.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-neutral-700 hover:bg-neutral-600 text-white font-medium text-sm rounded-lg transition-colors border border-neutral-600"
-              data-testid={`button-main-link-${emailId}-${index}`}
-            >
-              <span>{segment.label}</span>
-              <ExternalLink className="w-4 h-4" />
-            </a>
+            <div key={index} className="py-2">
+              <a
+                href={segment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium text-sm rounded-lg transition-colors"
+                data-testid={`button-main-link-${emailId}-${index}`}
+              >
+                <span>{segment.label}</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
           );
         }
         

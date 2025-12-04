@@ -312,6 +312,71 @@ function normalizeText(text) {
     .trim();
 }
 
+function extractUrlsFromHtml(html) {
+  const urls = [];
+  const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
+  let match;
+  while ((match = hrefRegex.exec(html)) !== null) {
+    urls.push(match[1].replace(/&amp;/g, "&").toLowerCase());
+  }
+  return urls;
+}
+
+function isHouseholdEmailByUrls(htmlContent) {
+  const urls = extractUrlsFromHtml(htmlContent);
+  
+  const householdUrlPatterns = [
+    'travel',
+    'temporary',
+    'getcode',
+    'get-code',
+    'get_code',
+    'account/travel',
+    'accountaccess',
+    'tempaccess',
+    'temp-access',
+  ];
+  
+  const excludeUrlPatterns = [
+    'password',
+    'reset',
+    'signin',
+    'sign-in',
+    'login',
+    'browse',
+    'watch',
+    'title',
+    'tudum',
+    'help.netflix',
+    'unsubscribe',
+    'notification',
+    'privacy',
+    'terms',
+    'legal',
+  ];
+  
+  for (const url of urls) {
+    if (url.includes('netflix.com') || url.includes('nflx')) {
+      for (const pattern of householdUrlPatterns) {
+        if (url.includes(pattern)) {
+          let isExcluded = false;
+          for (const excludePattern of excludeUrlPatterns) {
+            if (url.includes(excludePattern)) {
+              isExcluded = true;
+              break;
+            }
+          }
+          if (!isExcluded) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
 function isHouseholdEmailByContent(translatedText) {
   const content = normalizeText(translatedText);
   
@@ -333,6 +398,9 @@ function isHouseholdEmailByContent(translatedText) {
     /\bnewsletter\b/i,
     /\bwhat\s*to\s*watch\b/i,
     /\brecommendation\b/i,
+    /\busing\s*your\s*account\b/i,
+    /\bcore\s*domestic\b/i,
+    /\bcore\s*home\b/i,
   ];
   
   for (const pattern of excludePatterns) {
@@ -345,15 +413,12 @@ function isHouseholdEmailByContent(translatedText) {
     /\bhousehold\b/i,
     /\btemporary\s*access\b/i,
     /\btemporary\s*code\b/i,
-    /\btravel\b/i,
-    /\btraveling\b/i,
+    /\btravel(ing|er)?\b/i,
     /\baway\s*from\s*home\b/i,
-    /\bget\s*code\b/i,
+    /\bget\s*(a\s*)?code\b/i,
     /\baccess\s*code\b/i,
     /\btemporary\s*member\b/i,
-    /\byes[,]?\s*it\s*was\s*me\b/i,
-    /\bnot\s*me\b/i,
-    /\bwasn'?t\s*me\b/i,
+    /\bwatch(ing)?\s*(away|outside|somewhere)\b/i,
   ];
   
   for (const pattern of householdPatterns) {
@@ -518,9 +583,15 @@ function searchNetflixEmails(imapConfig, userEmail) {
               let householdEmail = null;
               
               for (const email of sortedEmails) {
+                const htmlContent = email.html || "";
+                
+                if (isHouseholdEmailByUrls(htmlContent)) {
+                  householdEmail = email;
+                  break;
+                }
+                
                 const subject = email.subject || "";
                 const textContent = email.text || "";
-                const htmlContent = email.html || "";
                 const combinedRaw = subject + " " + textContent + " " + htmlContent;
                 
                 const translatedContent = await translateToEnglish(combinedRaw);
