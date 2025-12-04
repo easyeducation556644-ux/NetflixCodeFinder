@@ -130,7 +130,7 @@ export default function Home() {
       const emailCount = data.emails?.length || data.totalCount || 0;
       toast({
         title: "Emails Found",
-        description: `Found ${emailCount} Netflix email(s) from the last 16 minutes.`,
+        description: `Found ${emailCount} Netflix email(s) from the last 30 days.`,
       });
     },
     onError: (error) => {
@@ -170,7 +170,7 @@ export default function Home() {
           <div className="text-center mb-5">
             <h2 className="text-lg font-medium text-white">Find Access Code</h2>
             <p className="text-neutral-500 text-xs mt-1">
-              Enter the email to search for codes (last 16 minutes)
+              Enter the email to search for codes (last 30 days)
             </p>
           </div>
 
@@ -231,7 +231,7 @@ export default function Home() {
             >
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">
-                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> email(s) from the last 16 minutes
+                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> email(s) from the last 30 days
                 </p>
               </div>
 
@@ -300,7 +300,7 @@ export default function Home() {
         </AnimatePresence>
 
         <p className="text-center text-xs text-neutral-600">
-          Searches your admin inbox for Netflix codes (last 16 minutes)
+          Searches your admin inbox for Netflix codes (last 30 days)
         </p>
       </motion.div>
     </div>

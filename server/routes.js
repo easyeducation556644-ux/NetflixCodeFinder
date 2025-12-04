@@ -53,7 +53,7 @@ export async function registerRoutes(httpServer, app) {
         res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address in the last 16 minutes." 
+          error: "No Netflix email found for this address in the last 30 days." 
         });
       }
     } catch (error) {
@@ -124,7 +124,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const emails = await Promise.all(emailPromises);
               
               const userEmailLower = userEmail.toLowerCase().trim();
-              const sixteenMinutesAgo = new Date(Date.now() - 16 * 60 * 1000);
+              const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
               
               const userEmails = emails
                 .filter((email) => email !== null)
@@ -163,7 +163,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
               const recentEmails = netflixEmails.filter((email) => {
                 const emailDate = new Date(email.date);
-                return emailDate >= sixteenMinutesAgo;
+                return emailDate >= thirtyDaysAgo;
               });
 
               const sortedEmails = recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
