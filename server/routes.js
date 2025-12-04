@@ -7,6 +7,34 @@ async function translateToEnglish(text) {
   
   try {
     console.log("Translating text (length:", text.length, ")");
+    
+    if (text.length > 3000) {
+      const chunks = [];
+      const sentences = text.split(/(?<=[.!?])\s+/);
+      let currentChunk = "";
+      
+      for (const sentence of sentences) {
+        if ((currentChunk + sentence).length > 2000) {
+          if (currentChunk) chunks.push(currentChunk.trim());
+          currentChunk = sentence;
+        } else {
+          currentChunk += " " + sentence;
+        }
+      }
+      if (currentChunk) chunks.push(currentChunk.trim());
+      
+      const translatedChunks = [];
+      for (const chunk of chunks) {
+        try {
+          const result = await translatte(chunk, { to: "en" });
+          translatedChunks.push(result.text);
+        } catch (e) {
+          translatedChunks.push(chunk);
+        }
+      }
+      return translatedChunks.join(" ");
+    }
+    
     const result = await translatte(text, { to: "en" });
     console.log("Translation result:", result.text ? result.text.substring(0, 100) + "..." : "empty");
     return result.text;
@@ -524,7 +552,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
               let translatedHtml = htmlContent;
               try {
                 const textOnly = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                if (textOnly.length > 0 && textOnly.length < 5000) {
+                if (textOnly.length > 0 && textOnly.length < 15000) {
                   const translatedText = await translateToEnglish(textOnly);
                   const paragraphs = translatedText.split(/\n+/).filter(p => p.trim());
                   
