@@ -147,6 +147,13 @@ The application is configured for Vercel deployment with:
 
 ## Recent Changes
 
+- **Security Hardening (Dec 2025)**: Implemented comprehensive security measures:
+  - **URL Sanitization**: Strict allowlist of Netflix domains (netflix.com, nflxso.net and subdomains)
+  - **Protocol Validation**: Only allows http/https protocols, blocks javascript:, data:, vbscript:
+  - **Encoded Payload Detection**: Decodes URLs to catch encoded dangerous patterns
+  - **HTML Escaping**: All dynamic content is escaped using `escapeHtml()` function before rendering
+  - **Link Filtering**: Non-Netflix links are dropped and only their text content is shown
+- **Email Display Fix (Dec 2025)**: Fixed bug where raw CSS was displayed as text instead of properly rendered content
 - **Simplified Email Filtering (Dec 2025)**: Rewrote email filtering to use a simpler, more reliable approach matching the Telegram bot pattern:
   1. Check translated subject for keywords: "temporary" or "household"
   2. Check email body for Netflix account links (`netflix.com/account`)
