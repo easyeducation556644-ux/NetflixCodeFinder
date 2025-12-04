@@ -86,27 +86,33 @@ async function processContentWithLinks(html, text) {
   const seenUrls = new Set();
   
   if (html) {
-    const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
-    let linkMatch;
+    const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
+    let hrefMatch;
     
-    while ((linkMatch = linkRegex.exec(html)) !== null) {
-      let url = linkMatch[1];
-      const linkText = linkMatch[2].trim();
-      
+    while ((hrefMatch = hrefRegex.exec(html)) !== null) {
+      let url = hrefMatch[1];
       url = url.replace(/&amp;/g, "&");
       
-      if (url.includes("unsubscribe") || url.includes("mailto:") || url.includes("help.netflix")) {
+      if (url.includes("unsubscribe") || url.includes("mailto:") || url.includes("help.netflix") || url.includes("notification")) {
         continue;
       }
       
-      if (!seenUrls.has(url) && url.includes("netflix")) {
+      if (!seenUrls.has(url) && url.includes("netflix.com")) {
         seenUrls.add(url);
-        const isMain = isMainActionLink(url);
-        if (isMain) {
-          let label = getLinkLabel(url);
-          if (linkText && linkText.length > 0 && linkText.length < 50) {
-            label = linkText.replace(/\s+/g, ' ').trim();
-          }
+        
+        const hasActionKeyword = 
+          url.includes("/account") ||
+          url.includes("/password") ||
+          url.includes("/loginhelp") ||
+          url.includes("/dnr") ||
+          url.includes("/e/") ||
+          url.includes("YesItWasMe") ||
+          url.includes("NotMe") ||
+          url.includes("nflink") ||
+          url.includes("travel");
+        
+        if (hasActionKeyword) {
+          const label = getLinkLabel(url);
           mainLinks.push({ type: "link", label, url, isMain: true });
         }
       }
@@ -217,7 +223,7 @@ export async function registerRoutes(httpServer, app) {
         res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address in the last 15 minutes." 
+          error: "No Netflix email found for this address." 
         });
       }
     } catch (error) {
@@ -288,7 +294,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const emails = await Promise.all(emailPromises);
               
               const userEmailLower = userEmail.toLowerCase().trim();
-              const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
@@ -312,12 +317,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   );
                 });
 
-              const recentEmails = netflixEmails.filter((email) => {
-                const emailDate = new Date(email.date);
-                return emailDate >= fifteenMinutesAgo;
-              });
-
-              const sortedEmails = recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+              const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
               
               const latestEmail = sortedEmails.length > 0 ? [sortedEmails[0]] : [];
 
