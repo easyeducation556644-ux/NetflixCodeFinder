@@ -125,63 +125,45 @@ function escapeHtml(text) {
 async function translateHtmlContent(html) {
   if (!html || html.trim() === "") return html;
   
-  // Completely remove all style and script blocks - don't preserve them
-  let cleanHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  cleanHtml = cleanHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  // Step 1: Remove all dangerous elements completely
+  let processedHtml = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+    .replace(/<\?xml[^>]*\?>/gi, '')
+    .replace(/<!DOCTYPE[^>]*>/gi, '');
   
-  // Remove head section completely
-  cleanHtml = cleanHtml.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
-  
-  // Remove XML declarations and doctype
-  cleanHtml = cleanHtml.replace(/<\?xml[^>]*\?>/gi, '');
-  cleanHtml = cleanHtml.replace(/<!DOCTYPE[^>]*>/gi, '');
-  
-  // Remove html and body tags but keep their content
-  cleanHtml = cleanHtml.replace(/<html[^>]*>/gi, '');
-  cleanHtml = cleanHtml.replace(/<\/html>/gi, '');
-  cleanHtml = cleanHtml.replace(/<body[^>]*>/gi, '');
-  cleanHtml = cleanHtml.replace(/<\/body>/gi, '');
-  
-  // Remove all inline styles from elements  
-  cleanHtml = cleanHtml.replace(/\s*style\s*=\s*["'][^"']*["']/gi, '');
-  
-  // Remove bgcolor attributes
-  cleanHtml = cleanHtml.replace(/\s*bgcolor\s*=\s*["'][^"']*["']/gi, '');
-  
-  // Remove all CSS comments that might leak
-  cleanHtml = cleanHtml.replace(/\/\*[\s\S]*?\*\//g, '');
-  
-  // Remove any remaining @media or CSS declarations that leaked into text
-  cleanHtml = cleanHtml.replace(/@media[^{]*\{[^}]*\}/g, '');
-  cleanHtml = cleanHtml.replace(/@font-face[^{]*\{[^}]*\}/g, '');
-  
-  // Extract all text content for translation, preserving links
-  const linkPlaceholders = [];
-  let linkIndex = 0;
-  
-  // Preserve important links with placeholders
-  cleanHtml = cleanHtml.replace(/<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (match, url, linkText) => {
-    const urlLower = url.toLowerCase();
-    // Sanitize the URL first
-    const safeUrl = sanitizeUrl(url);
+  // Step 2: Extract all links with their content for CTA buttons
+  const links = [];
+  processedHtml = processedHtml.replace(/<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (match, url, content) => {
+    const urlClean = url.replace(/&amp;/g, '&');
+    const safeUrl = sanitizeUrl(urlClean);
+    const textContent = content.replace(/<[^>]+>/g, '').trim();
     
-    // Only keep Netflix action links that pass sanitization
-    if (safeUrl && urlLower.includes('netflix') && 
-        (urlLower.includes('yesitwasme') || urlLower.includes('yes-it-was-me') ||
-         urlLower.includes('account') || urlLower.includes('verify') ||
-         urlLower.includes('confirm') || urlLower.includes('travel'))) {
-      const placeholder = `___LINK_${linkIndex}___`;
-      const cleanLinkText = linkText.replace(/<[^>]+>/g, '').trim();
-      linkPlaceholders.push({ placeholder, url: safeUrl, text: cleanLinkText });
-      linkIndex++;
+    if (safeUrl && textContent) {
+      const urlLower = urlClean.toLowerCase();
+      // Check if this is a main action button
+      const isMainAction = urlLower.includes('yesitwasme') || 
+                           urlLower.includes('yes-it-was-me') ||
+                           urlLower.includes('yes_it_was_me') ||
+                           urlLower.includes('getcode') || 
+                           urlLower.includes('get-code') ||
+                           urlLower.includes('get_code') ||
+                           urlLower.includes('travel') ||
+                           urlLower.includes('temporary-access') ||
+                           urlLower.includes('signout') ||
+                           urlLower.includes('sign-out') ||
+                           urlLower.includes('unknown');
+      
+      const placeholder = `___LINK_${links.length}___`;
+      links.push({ placeholder, url: safeUrl, text: textContent, isMainAction });
       return placeholder;
     }
-    // For other links or unsafe URLs, just return the text
-    return linkText.replace(/<[^>]+>/g, '').trim();
+    return textContent || '';
   });
   
-  // Extract text content, stripping remaining HTML
-  let textContent = cleanHtml
+  // Step 3: Strip all remaining HTML tags and clean up text
+  let textContent = processedHtml
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<\/div>/gi, '\n')
@@ -202,7 +184,7 @@ async function translateHtmlContent(html) {
     .replace(/\n\s*\n\s*\n/g, '\n\n')
     .trim();
   
-  // Remove footer content
+  // Step 4: Remove footer content
   const footerPatterns = [
     /we're here to help[\s\S]*/i,
     /visit the help center[\s\S]*/i,
@@ -212,52 +194,69 @@ async function translateHtmlContent(html) {
     /netflix international[\s\S]*/i,
     /need help\?[\s\S]*/i,
     /questions\?[\s\S]*/i,
+    /do you have any questions[\s\S]*/i,
   ];
   
   for (const pattern of footerPatterns) {
     textContent = textContent.replace(pattern, '');
   }
-  
   textContent = textContent.trim();
   
-  // Translate the text content
+  // Step 5: Translate the text content
   let translatedContent = textContent;
   try {
     if (textContent.length > 0 && textContent.length < 10000) {
-      console.log("Translating email content, length:", textContent.length);
       translatedContent = await translateToEnglish(textContent);
     }
   } catch (e) {
-    console.error("Translation error:", e.message);
+    // Keep original on error
   }
   
-  // Restore link placeholders with proper styled buttons
-  for (const link of linkPlaceholders) {
-    const translatedLinkText = await translateToEnglish(link.text || 'Click Here');
-    // Escape both the URL and link text to prevent XSS
+  // Step 6: Translate and restore links
+  for (const link of links) {
+    let translatedText = link.text;
+    try {
+      translatedText = await translateToEnglish(link.text);
+    } catch (e) {
+      // Keep original on error
+    }
+    
+    // Build the button/link HTML with Netflix styling
     const safeUrl = escapeHtml(link.url);
-    const safeLinkText = escapeHtml(translatedLinkText);
-    const buttonHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 600; margin: 10px 0;">${safeLinkText}</a>`;
+    const safeText = escapeHtml(translatedText);
+    
+    let buttonHtml;
+    if (link.isMainAction) {
+      // Main action buttons with Netflix red background and white text
+      buttonHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 600; margin: 8px 4px;">${safeText}</a>`;
+    } else {
+      // Secondary links with Netflix style (red border, no fill)
+      buttonHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; border: 2px solid #E50914; color: #E50914; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: 500; margin: 8px 4px;">${safeText}</a>`;
+    }
+    
     translatedContent = translatedContent.replace(link.placeholder, buttonHtml);
   }
   
-  // Format content as clean HTML paragraphs
+  // Step 7: Format content as Netflix-styled HTML with dark theme
   const paragraphs = translatedContent
     .split(/\n\n+/)
     .map(p => p.trim())
     .filter(p => p && p.length > 0 && !p.match(/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"]+$/));
   
-  let formattedHtml = '';
+  let formattedHtml = '<div style="background-color: #141414; color: #ffffff; padding: 24px; font-family: \'Netflix Sans\', \'Helvetica Neue\', Helvetica, Arial, sans-serif; border-radius: 4px;">';
+  
   for (const para of paragraphs) {
-    // Check if paragraph contains a link that was converted to button (already escaped)
+    // Check if paragraph contains a button link
     if (para.includes('<a href=')) {
-      formattedHtml += `<div style="text-align: center; margin: 20px 0;">${para}</div>`;
+      formattedHtml += `<div style="text-align: center; margin: 24px 0;">${para}</div>`;
     } else {
-      // Escape text content paragraphs to prevent XSS
+      // Regular paragraph - escape to prevent XSS
       const safePara = escapeHtml(para);
-      formattedHtml += `<p style="margin-bottom: 16px; line-height: 1.6;">${safePara}</p>`;
+      formattedHtml += `<p style="margin-bottom: 16px; line-height: 1.6; color: #e5e5e5;">${safePara}</p>`;
     }
   }
+  
+  formattedHtml += '</div>';
   
   return formattedHtml;
 }
