@@ -15,13 +15,55 @@ const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
 });
 
+function ContentSegments({ segments, emailId }) {
+  if (!segments || segments.length === 0) {
+    return (
+      <div className="text-neutral-500 text-sm text-center py-2">
+        No content available
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="text-neutral-200 text-sm leading-relaxed text-justify"
+      data-testid={`content-${emailId}`}
+    >
+      {segments.map((segment, index) => {
+        if (segment.type === "text") {
+          return (
+            <span key={index} className="whitespace-pre-wrap">
+              {segment.value}{" "}
+            </span>
+          );
+        } else if (segment.type === "link") {
+          return (
+            <a
+              key={index}
+              href={segment.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 bg-primary/20 hover:bg-primary/30 text-primary rounded transition-colors"
+              data-testid={`link-${emailId}-${index}`}
+            >
+              <span className="font-medium text-xs">{segment.label}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          );
+        }
+        return null;
+      })}
+    </div>
+  );
+}
+
 function EmailContent({ email, emailId }) {
-  const { textContent, links, accessCode } = email;
+  const { contentSegments, accessCode } = email;
   
   return (
     <div 
       className="w-full space-y-4"
-      data-testid={`content-email-${emailId}`}
+      data-testid={`email-content-${emailId}`}
     >
       {accessCode && (
         <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 flex items-center justify-center gap-3">
@@ -35,40 +77,9 @@ function EmailContent({ email, emailId }) {
         </div>
       )}
       
-      {textContent && (
-        <div 
-          className="bg-neutral-800 rounded-lg p-4 text-neutral-200 text-sm leading-relaxed whitespace-pre-wrap"
-          data-testid={`text-content-${emailId}`}
-        >
-          {textContent}
-        </div>
-      )}
-      
-      {links && links.length > 0 && (
-        <div className="space-y-2">
-          {links.map((link, index) => (
-            <a
-              key={index}
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 bg-neutral-800 hover:bg-neutral-700 transition-colors rounded-lg p-3 group"
-              data-testid={`link-${emailId}-${index}`}
-            >
-              <span className="text-white text-sm font-medium truncate">
-                {link.label}
-              </span>
-              <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-primary flex-shrink-0 transition-colors" />
-            </a>
-          ))}
-        </div>
-      )}
-      
-      {!textContent && (!links || links.length === 0) && !accessCode && (
-        <div className="text-neutral-500 text-sm text-center py-2">
-          No content available
-        </div>
-      )}
+      <div className="bg-neutral-800 rounded-lg p-4">
+        <ContentSegments segments={contentSegments} emailId={emailId} />
+      </div>
     </div>
   );
 }

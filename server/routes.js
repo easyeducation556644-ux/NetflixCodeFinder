@@ -13,7 +13,23 @@ async function translateToEnglish(text) {
   }
 }
 
-function extractCleanText(html, text) {
+function getLinkLabel(url) {
+  if (url.includes("netflix.com/account/travel")) {
+    return "Get Code";
+  } else if (url.includes("netflix.com/account")) {
+    return "Go to Account";
+  } else if (url.includes("netflix.com/password")) {
+    return "Change Password";
+  } else if (url.includes("netflix.com/help")) {
+    return "Help Center";
+  } else if (url.includes("netflix.com")) {
+    return "Open Netflix";
+  }
+  return "Open Link";
+}
+
+async function processContentWithLinks(html, text) {
+  const segments = [];
   let content = text || "";
   
   if (html && !content) {
@@ -31,85 +47,61 @@ function extractCleanText(html, text) {
     content = content.replace(/&#39;/gi, "'");
     content = content.replace(/&#x27;/gi, "'");
     content = content.replace(/&#\d+;/gi, "");
-    content = content.replace(/[ \t]+/g, " ");
-    content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
   }
   
-  const lines = content.split("\n").filter(line => {
-    const trimmed = line.trim();
-    if (!trimmed) return false;
-    if (trimmed.match(/^https?:\/\/[^\s]+$/)) return false;
-    if (trimmed.length < 3) return false;
-    return true;
-  });
+  content = content.replace(/[ \t]+/g, " ");
+  content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
+  content = content.trim();
   
-  return lines.join("\n").trim();
-}
-
-async function extractLinks(html, text) {
-  const links = [];
+  const urlRegex = /\[?(https?:\/\/[^\s\[\]<>"']+)\]?/gi;
+  let lastIndex = 0;
+  let match;
   
-  if (html) {
-    const anchorRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
-    let match;
-    while ((match = anchorRegex.exec(html)) !== null) {
-      const url = match[1];
-      let label = match[2].trim();
-      
-      label = label.replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
-      
-      if (!label) {
-        if (url.includes("netflix.com/account")) {
-          label = "Go to Account";
-        } else if (url.includes("netflix.com")) {
-          label = "Open Netflix";
-        } else {
-          label = "Open Link";
-        }
-      }
-      
-      if (url && url.startsWith("http") && !url.includes("unsubscribe") && !url.includes("mailto:")) {
-        links.push({ url, label });
-      }
-    }
-  }
-  
-  if (links.length === 0) {
-    const urlRegex = /https?:\/\/[^\s<>"']+/gi;
-    const content = html || text || "";
-    const matches = content.match(urlRegex) || [];
-    
-    matches.forEach(url => {
-      const cleanUrl = url.replace(/['">\]]+$/, "");
-      if (!cleanUrl.includes("unsubscribe") && !cleanUrl.includes("mailto:")) {
-        let label = "Open Link";
-        if (cleanUrl.includes("netflix.com/account")) {
-          label = "Go to Account";
-        } else if (cleanUrl.includes("netflix.com")) {
-          label = "Open Netflix";
-        }
-        links.push({ url: cleanUrl, label });
-      }
-    });
-  }
-  
-  const uniqueLinks = [];
   const seenUrls = new Set();
-  for (const link of links) {
-    if (!seenUrls.has(link.url)) {
-      seenUrls.add(link.url);
-      uniqueLinks.push(link);
+  
+  while ((match = urlRegex.exec(content)) !== null) {
+    const url = match[1].replace(/['">\].,;:]+$/, "");
+    
+    if (url.includes("unsubscribe") || url.includes("mailto:")) {
+      continue;
+    }
+    
+    if (match.index > lastIndex) {
+      const textBefore = content.slice(lastIndex, match.index).trim();
+      if (textBefore) {
+        segments.push({ type: "text", value: textBefore });
+      }
+    }
+    
+    if (!seenUrls.has(url)) {
+      seenUrls.add(url);
+      const label = getLinkLabel(url);
+      segments.push({ type: "link", label, url });
+    }
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  if (lastIndex < content.length) {
+    const remainingText = content.slice(lastIndex).trim();
+    if (remainingText) {
+      segments.push({ type: "text", value: remainingText });
     }
   }
   
-  const translatedLinks = await Promise.all(
-    uniqueLinks.slice(0, 5).map(async (link) => {
-      const translatedLabel = await translateToEnglish(link.label);
-      return { url: link.url, label: translatedLabel };
+  const translatedSegments = await Promise.all(
+    segments.map(async (segment) => {
+      if (segment.type === "text") {
+        const translated = await translateToEnglish(segment.value);
+        return { type: "text", value: translated };
+      } else if (segment.type === "link") {
+        return segment;
+      }
+      return segment;
     })
   );
   
-  return translatedLinks;
+  return translatedSegments;
 }
 
 function extractAccessCode(content) {
@@ -290,10 +282,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 const combinedContent = textContent + " " + htmlContent;
                 
                 const translatedSubject = await translateToEnglish(email.subject || "Email");
-                const cleanText = extractCleanText(htmlContent, textContent);
-                const translatedContent = await translateToEnglish(cleanText);
-                
-                const links = await extractLinks(htmlContent, textContent);
+                const contentSegments = await processContentWithLinks(htmlContent, textContent);
                 const accessCode = extractAccessCode(combinedContent);
                 
                 return {
@@ -302,8 +291,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
                   from: email.from?.text || "",
                   to: email.to?.text || "",
-                  textContent: translatedContent,
-                  links: links,
+                  contentSegments: contentSegments,
                   accessCode: accessCode,
                 };
               }));
