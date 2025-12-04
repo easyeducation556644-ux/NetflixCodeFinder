@@ -202,7 +202,17 @@ async function processContentWithLinks(html, text) {
     /privacy/i,
     /help center netflix/i,
     /netflix entretenimento/i,
+    /netflix m[eé]xico/i,
+    /netflix dream/i,
+    /customer center/i,
+    /please check the page/i,
+    /for more detailed information/i,
+    /contact our/i,
+    /need help\??/i,
+    /it's also good/i,
     /src:/i,
+    /s\. de r\.l\./i,
+    /do you have any questions/i,
   ];
   
   const lines = content.split('\n');
@@ -219,7 +229,12 @@ async function processContentWithLinks(html, text) {
     if (cutoffIndex !== lines.length) break;
   }
   
-  const cleanedLines = lines.slice(0, cutoffIndex).filter(line => line.trim());
+  const cleanedLines = lines.slice(0, cutoffIndex)
+    .filter(line => line.trim())
+    .filter(line => !line.trim().match(/^\[+$/))
+    .filter(line => !line.trim().match(/^\]+$/))
+    .filter(line => line.trim() !== '[')
+    .filter(line => line.trim() !== ']');
   const cleanedContent = cleanedLines.join('\n').trim();
   
   const segments = [];
