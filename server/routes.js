@@ -53,7 +53,7 @@ export async function registerRoutes(httpServer, app) {
         res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address in the last 24 hours." 
+          error: "No email found for this address in the last 24 hours." 
         });
       }
     } catch (error) {
@@ -145,23 +145,8 @@ function searchNetflixEmails(imapConfig, userEmail) {
                     htmlContent.includes(userEmailLower)
                   );
                 });
-              
-              const netflixEmails = userEmails.filter((email) => {
-                const fromAddress = (email.from?.text || "").toLowerCase();
-                const subject = (email.subject || "").toLowerCase();
-                const textContent = (email.text || "").toLowerCase();
-                const htmlContent = (email.html || "").toLowerCase();
-                
-                const isFromNetflix = fromAddress.includes("netflix");
-                const hasNetflixInSubject = subject.includes("netflix");
-                const hasNetflixContent = 
-                  textContent.includes("netflix") ||
-                  htmlContent.includes("netflix");
-                
-                return isFromNetflix || hasNetflixInSubject || hasNetflixContent;
-              });
 
-              const recentEmails = netflixEmails.filter((email) => {
+              const recentEmails = userEmails.filter((email) => {
                 const emailDate = new Date(email.date);
                 return emailDate >= twentyFourHoursAgo;
               });

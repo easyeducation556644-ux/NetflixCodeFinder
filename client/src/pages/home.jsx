@@ -130,7 +130,7 @@ export default function Home() {
       const emailCount = data.emails?.length || data.totalCount || 0;
       toast({
         title: "Emails Found",
-        description: `Found ${emailCount} Netflix email(s) from the last 24 hours.`,
+        description: `Found ${emailCount} email(s) from the last 24 hours.`,
       });
     },
     onError: (error) => {
@@ -231,7 +231,7 @@ export default function Home() {
             >
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">
-                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> email(s) from the last 24 hours
+                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> email(s)
                 </p>
               </div>
 
@@ -300,7 +300,7 @@ export default function Home() {
         </AnimatePresence>
 
         <p className="text-center text-xs text-neutral-600">
-          Searches your admin inbox for Netflix codes (last 24 hours)
+          Searches emails from the last 24 hours
         </p>
       </motion.div>
     </div>
