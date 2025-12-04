@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, AlertCircle, Loader2, ExternalLink, Key } from "lucide-react";
+import { Search, Mail, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,59 +24,53 @@ function ContentSegments({ segments, emailId }) {
     );
   }
 
+  const mainLinks = segments.filter(s => s.type === "link" && s.isMain);
+  const textSegments = segments.filter(s => s.type === "text");
+
   return (
     <div 
-      className="text-neutral-200 text-sm leading-relaxed text-justify"
+      className="space-y-4"
       data-testid={`content-${emailId}`}
     >
-      {segments.map((segment, index) => {
-        if (segment.type === "text") {
-          return (
-            <span key={index} className="whitespace-pre-wrap">
-              {segment.value}{" "}
-            </span>
-          );
-        } else if (segment.type === "link") {
-          return (
+      {mainLinks.length > 0 && (
+        <div className="flex flex-wrap gap-2 justify-center">
+          {mainLinks.map((segment, index) => (
             <a
               key={index}
               href={segment.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 bg-primary/20 hover:bg-primary/30 text-primary rounded transition-colors"
-              data-testid={`link-${emailId}-${index}`}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors shadow-lg"
+              data-testid={`button-main-link-${emailId}-${index}`}
             >
-              <span className="font-medium text-xs">{segment.label}</span>
-              <ExternalLink className="w-3 h-3" />
+              <span>{segment.label}</span>
+              <ExternalLink className="w-4 h-4" />
             </a>
-          );
-        }
-        return null;
-      })}
+          ))}
+        </div>
+      )}
+      
+      {textSegments.length > 0 && (
+        <div className="text-neutral-200 text-sm leading-relaxed text-justify">
+          {textSegments.map((segment, index) => (
+            <span key={index} className="whitespace-pre-wrap">
+              {segment.value}{" "}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function EmailContent({ email, emailId }) {
-  const { contentSegments, accessCode } = email;
+  const { contentSegments } = email;
   
   return (
     <div 
-      className="w-full space-y-4"
+      className="w-full"
       data-testid={`email-content-${emailId}`}
     >
-      {accessCode && (
-        <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 flex items-center justify-center gap-3">
-          <Key className="w-5 h-5 text-primary" />
-          <div className="text-center">
-            <p className="text-neutral-400 text-xs mb-1">Access Code</p>
-            <p className="text-3xl font-bold text-white tracking-widest" data-testid={`code-${emailId}`}>
-              {accessCode}
-            </p>
-          </div>
-        </div>
-      )}
-      
       <div className="bg-neutral-800 rounded-lg p-4">
         <ContentSegments segments={contentSegments} emailId={emailId} />
       </div>
@@ -115,8 +109,8 @@ export default function Home() {
       setResults(data);
       const emailCount = data.emails?.length || data.totalCount || 0;
       toast({
-        title: "Emails Found",
-        description: `Found ${emailCount} Netflix email(s) from the last 24 hours.`,
+        title: "Email Found",
+        description: `Found the latest Netflix email from the last 15 minutes.`,
       });
     },
     onError: (error) => {
@@ -154,9 +148,9 @@ export default function Home() {
           className="bg-neutral-900 rounded-xl p-6 border border-neutral-800"
         >
           <div className="text-center mb-5">
-            <h2 className="text-lg font-medium text-white">Find Access Code</h2>
+            <h2 className="text-lg font-medium text-white">Find Latest Email</h2>
             <p className="text-neutral-500 text-xs mt-1">
-              Enter the email to search for codes (last 24 hours)
+              Enter the email to search (last 15 minutes)
             </p>
           </div>
 
@@ -217,7 +211,7 @@ export default function Home() {
             >
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">
-                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> Netflix email(s)
+                  Latest Netflix email
                 </p>
               </div>
 
@@ -286,7 +280,7 @@ export default function Home() {
         </AnimatePresence>
 
         <p className="text-center text-xs text-neutral-600">
-          Searches Netflix emails from the last 24 hours
+          Searches Netflix emails from the last 15 minutes
         </p>
       </motion.div>
     </div>

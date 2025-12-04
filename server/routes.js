@@ -28,6 +28,59 @@ function getLinkLabel(url) {
   return "Open Link";
 }
 
+function isMainActionLink(url) {
+  const mainLinkPatterns = [
+    /netflix\.com\/account\/travel/i,
+    /netflix\.com\/account\/update/i,
+    /netflix\.com\/account\/confirm/i,
+    /netflix\.com\/account\/verify/i,
+    /netflix\.com\/password/i,
+    /netflix\.com\/loginhelp/i,
+    /netflix\.com\/dnr/i,
+    /netflix\.com\/YesItWasMe/i,
+    /netflix\.com\/NotMe/i,
+    /netflix\.com\/nflink/i,
+    /netflix\.com\/e\//i,
+    /accountaccess/i,
+    /device.*confirm/i,
+    /verify/i,
+    /confirm/i,
+    /reset/i,
+    /signin.*link/i,
+  ];
+  
+  const promotionalPatterns = [
+    /netflix\.com\/browse/i,
+    /netflix\.com\/title/i,
+    /netflix\.com\/watch/i,
+    /netflix\.com\/latest/i,
+    /netflix\.com\/tudum/i,
+    /netflix\.com\/about/i,
+    /netflix\.com\/jobs/i,
+    /netflix\.com\/legal/i,
+    /netflix\.com\/privacy/i,
+    /netflix\.com\/terms/i,
+    /help\.netflix\.com/i,
+    /media\.netflix\.com/i,
+    /unsubscribe/i,
+    /mailto:/i,
+  ];
+  
+  for (const pattern of promotionalPatterns) {
+    if (pattern.test(url)) {
+      return false;
+    }
+  }
+  
+  for (const pattern of mainLinkPatterns) {
+    if (pattern.test(url)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 async function processContentWithLinks(html, text) {
   const segments = [];
   let content = text || "";
@@ -76,7 +129,8 @@ async function processContentWithLinks(html, text) {
     if (!seenUrls.has(url)) {
       seenUrls.add(url);
       const label = getLinkLabel(url);
-      segments.push({ type: "link", label, url });
+      const isMain = isMainActionLink(url);
+      segments.push({ type: "link", label, url, isMain });
     }
     
     lastIndex = match.index + match[0].length;
@@ -172,7 +226,7 @@ export async function registerRoutes(httpServer, app) {
         res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address in the last 24 hours." 
+          error: "No Netflix email found for this address in the last 15 minutes." 
         });
       }
     } catch (error) {
@@ -243,7 +297,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const emails = await Promise.all(emailPromises);
               
               const userEmailLower = userEmail.toLowerCase().trim();
-              const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+              const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
@@ -269,14 +323,16 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
               const recentEmails = netflixEmails.filter((email) => {
                 const emailDate = new Date(email.date);
-                return emailDate >= twentyFourHoursAgo;
+                return emailDate >= fifteenMinutesAgo;
               });
 
               const sortedEmails = recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+              
+              const latestEmail = sortedEmails.length > 0 ? [sortedEmails[0]] : [];
 
               imap.end();
 
-              const formattedEmails = await Promise.all(sortedEmails.map(async (email) => {
+              const formattedEmails = await Promise.all(latestEmail.map(async (email) => {
                 const htmlContent = email.html || "";
                 const textContent = email.text || "";
                 const combinedContent = textContent + " " + htmlContent;
