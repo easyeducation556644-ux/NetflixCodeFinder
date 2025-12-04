@@ -528,32 +528,55 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   const translatedText = await translateToEnglish(textOnly);
                   const paragraphs = translatedText.split(/\n+/).filter(p => p.trim());
                   
-                  let mainButton = '';
+                  let mainButtonHtml = '';
+                  let deviceInfoHtml = '';
+                  
                   for (const seg of contentSegments) {
                     if (seg.type === 'buttons' && seg.buttons) {
                       for (const btn of seg.buttons) {
-                        if (btn.category === 'yesItWasMe' || btn.category === 'notMe') {
-                          mainButton = `
-                            <div style="text-align: center; margin: 24px 0;">
-                              <a href="${btn.url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 14px 32px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">
-                                ${btn.label}
-                              </a>
-                            </div>`;
+                        if (btn.category === 'yesItWasMe') {
+                          mainButtonHtml = `
+                            <a href="${btn.url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 15px;">
+                              ${btn.label}
+                            </a>`;
                           break;
                         }
                       }
                     }
-                    if (mainButton) break;
                   }
                   
-                  translatedHtml = `
-                    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; background-color: #1a1a1a; color: #e5e5e5; padding: 0;">
-                      <div style="text-align: center; padding: 24px 0; border-bottom: 1px solid #333;">
-                        <span style="color: #E50914; font-size: 42px; font-weight: bold;">NETFLIX</span>
+                  const deviceMatch = translatedText.match(/request.*?from.*?device.*?(\w+.*?stick|\w+.*?tv|\w+.*?phone|\w+.*?tablet)/i);
+                  const dateMatch = translatedText.match(/(\w+\s+\d+,?\s*\d*|\d+\s+\w+,?\s*\d*)/i);
+                  
+                  if (deviceMatch || dateMatch) {
+                    deviceInfoHtml = `
+                      <div style="background-color: #ffffff; border-radius: 8px; padding: 16px 20px; margin: 20px 0; display: flex; align-items: flex-start; gap: 16px;">
+                        <div style="width: 40px; height: 40px; background-color: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                          <span style="font-size: 20px;">📺</span>
+                        </div>
+                        <div style="flex: 1; color: #333333; font-size: 14px; line-height: 1.5;">
+                          <div>Request sent from device</div>
+                          <div style="font-weight: bold; margin: 4px 0;">${deviceMatch ? deviceMatch[1] : 'Streaming Device'}</div>
+                          <div style="color: #666666;">${dateMatch ? dateMatch[1] : ''}</div>
+                        </div>
                       </div>
-                      <div style="padding: 24px 20px;">
-                        ${paragraphs.map(p => `<p style="margin: 0 0 16px 0; color: #e5e5e5; font-size: 15px; line-height: 1.6;">${p}</p>`).join('')}
-                        ${mainButton}
+                      <div style="text-align: center; margin: 20px 0;">
+                        ${mainButtonHtml}
+                      </div>
+                      <p style="color: #999999; font-size: 13px; margin-top: 16px;">* The link expires after 15 minutes.</p>
+                    `;
+                  }
+                  
+                  const bodyParagraphs = paragraphs.slice(0, Math.min(4, paragraphs.length));
+                  
+                  translatedHtml = `
+                    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 100%; background-color: #000000; color: #ffffff; padding: 0;">
+                      <div style="padding: 20px;">
+                        <h1 style="color: #ffffff; font-size: 28px; font-weight: bold; margin: 0 0 20px 0; line-height: 1.3;">
+                          Do you want to update your Netflix Household?
+                        </h1>
+                        ${bodyParagraphs.map(p => `<p style="margin: 0 0 16px 0; color: #ffffff; font-size: 15px; line-height: 1.6;">${p}</p>`).join('')}
+                        ${deviceInfoHtml || (mainButtonHtml ? `<div style="text-align: center; margin: 24px 0;">${mainButtonHtml}</div>` : '')}
                       </div>
                     </div>`;
                 }
