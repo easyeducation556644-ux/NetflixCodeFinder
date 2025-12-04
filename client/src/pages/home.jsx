@@ -40,32 +40,71 @@ function ContentSegments({ segments, emailId }) {
         
         if (segment.type === "buttons" && segment.buttons) {
           return (
-            <div key={index} className="py-2">
-              {segment.buttons.map((btn, btnIndex) => (
-                <a
-                  key={btnIndex}
-                  href={btn.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium text-sm rounded-lg transition-colors"
-                  data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
-                >
-                  <span>{btn.label}</span>
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              ))}
+            <div key={index} className="py-2 flex flex-wrap gap-2">
+              {segment.buttons.map((btn, btnIndex) => {
+                const isPlainLink = btn.category === "resetPassword" || btn.category === "manageDevices";
+                
+                if (isPlainLink) {
+                  return (
+                    <a
+                      key={btnIndex}
+                      href={btn.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-neutral-400 hover:text-white text-sm underline underline-offset-2 transition-colors"
+                      data-testid={`link-${btn.category || 'action'}-${emailId}-${btnIndex}`}
+                    >
+                      <span>{btn.label}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  );
+                }
+                
+                return (
+                  <a
+                    key={btnIndex}
+                    href={btn.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-800/80 hover:bg-red-700/80 text-white font-medium text-sm rounded-full transition-colors"
+                    data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
+                  >
+                    <span>{btn.label}</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                );
+              })}
             </div>
           );
         }
         
         if (segment.type === "link" && segment.isMain) {
+          const isPlainLink = segment.category === "resetPassword" || segment.category === "manageDevices";
+          
+          if (isPlainLink) {
+            return (
+              <div key={index} className="py-2">
+                <a
+                  href={segment.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-neutral-400 hover:text-white text-sm underline underline-offset-2 transition-colors"
+                  data-testid={`link-main-${emailId}-${index}`}
+                >
+                  <span>{segment.label}</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            );
+          }
+          
           return (
             <div key={index} className="py-2">
               <a
                 href={segment.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium text-sm rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-800/80 hover:bg-red-700/80 text-white font-medium text-sm rounded-full transition-colors"
                 data-testid={`button-main-link-${emailId}-${index}`}
               >
                 <span>{segment.label}</span>
