@@ -13,6 +13,39 @@ async function translateToEnglish(text) {
   }
 }
 
+function extractCleanText(html, text) {
+  let content = text || "";
+  
+  if (html && !content) {
+    content = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    content = content.replace(/<br\s*\/?>/gi, "\n");
+    content = content.replace(/<\/p>/gi, "\n\n");
+    content = content.replace(/<\/div>/gi, "\n");
+    content = content.replace(/<[^>]+>/g, " ");
+    content = content.replace(/&nbsp;/gi, " ");
+    content = content.replace(/&amp;/gi, "&");
+    content = content.replace(/&lt;/gi, "<");
+    content = content.replace(/&gt;/gi, ">");
+    content = content.replace(/&quot;/gi, '"');
+    content = content.replace(/&#39;/gi, "'");
+    content = content.replace(/&#x27;/gi, "'");
+    content = content.replace(/&#\d+;/gi, "");
+    content = content.replace(/[ \t]+/g, " ");
+    content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
+  }
+  
+  const lines = content.split("\n").filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    if (trimmed.match(/^https?:\/\/[^\s]+$/)) return false;
+    if (trimmed.length < 3) return false;
+    return true;
+  });
+  
+  return lines.join("\n").trim();
+}
+
 async function extractLinks(html, text) {
   const links = [];
   
@@ -177,12 +210,15 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const userEmailLower = userEmail.toLowerCase().trim();
               const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
               
-              const userEmails = emails
+              const netflixEmails = emails
                 .filter((email) => email !== null)
+                .filter((email) => {
+                  const fromAddress = (email.from?.text || "").toLowerCase();
+                  return fromAddress.includes("netflix");
+                })
                 .filter((email) => {
                   const toAddresses = (email.to?.text || "").toLowerCase();
                   const ccAddresses = (email.cc?.text || "").toLowerCase();
-                  const fromAddresses = (email.from?.text || "").toLowerCase();
                   const subject = (email.subject || "").toLowerCase();
                   const textContent = (email.text || "").toLowerCase();
                   const htmlContent = (email.html || "").toLowerCase();
@@ -190,14 +226,13 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   return (
                     toAddresses.includes(userEmailLower) ||
                     ccAddresses.includes(userEmailLower) ||
-                    fromAddresses.includes(userEmailLower) ||
                     subject.includes(userEmailLower) ||
                     textContent.includes(userEmailLower) ||
                     htmlContent.includes(userEmailLower)
                   );
                 });
 
-              const recentEmails = userEmails.filter((email) => {
+              const recentEmails = netflixEmails.filter((email) => {
                 const emailDate = new Date(email.date);
                 return emailDate >= twentyFourHoursAgo;
               });
@@ -212,8 +247,10 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 const combinedContent = textContent + " " + htmlContent;
                 
                 const translatedSubject = await translateToEnglish(email.subject || "Email");
+                const cleanText = extractCleanText(htmlContent, textContent);
+                const translatedContent = await translateToEnglish(cleanText);
                 
-                const links = extractLinks(htmlContent, textContent);
+                const links = await extractLinks(htmlContent, textContent);
                 const accessCode = extractAccessCode(combinedContent);
                 
                 return {
@@ -222,6 +259,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   receivedAt: email.date ? email.date.toISOString() : new Date().toISOString(),
                   from: email.from?.text || "",
                   to: email.to?.text || "",
+                  textContent: translatedContent,
                   links: links,
                   accessCode: accessCode,
                 };
@@ -277,7 +315,7 @@ export default async function handler(req, res) {
       res.status(200).json({ emails: results, totalCount: results.length });
     } else {
       res.status(404).json({ 
-        error: "No email found for this address in the last 24 hours." 
+        error: "No Netflix email found for this address in the last 24 hours." 
       });
     }
   } catch (error) {

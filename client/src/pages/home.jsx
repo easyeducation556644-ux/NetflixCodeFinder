@@ -15,21 +15,12 @@ const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
 });
 
-function EmailLinks({ links, accessCode, emailId }) {
-  if ((!links || links.length === 0) && !accessCode) {
-    return (
-      <div 
-        className="w-full bg-neutral-900 rounded-lg p-4 text-neutral-500 text-sm text-center"
-        data-testid={`content-email-${emailId}`}
-      >
-        No links found in this email
-      </div>
-    );
-  }
-
+function EmailContent({ email, emailId }) {
+  const { textContent, links, accessCode } = email;
+  
   return (
     <div 
-      className="w-full space-y-3"
+      className="w-full space-y-4"
       data-testid={`content-email-${emailId}`}
     >
       {accessCode && (
@@ -41,6 +32,15 @@ function EmailLinks({ links, accessCode, emailId }) {
               {accessCode}
             </p>
           </div>
+        </div>
+      )}
+      
+      {textContent && (
+        <div 
+          className="bg-neutral-800 rounded-lg p-4 text-neutral-200 text-sm leading-relaxed whitespace-pre-wrap"
+          data-testid={`text-content-${emailId}`}
+        >
+          {textContent}
         </div>
       )}
       
@@ -61,6 +61,12 @@ function EmailLinks({ links, accessCode, emailId }) {
               <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-primary flex-shrink-0 transition-colors" />
             </a>
           ))}
+        </div>
+      )}
+      
+      {!textContent && (!links || links.length === 0) && !accessCode && (
+        <div className="text-neutral-500 text-sm text-center py-2">
+          No content available
         </div>
       )}
     </div>
@@ -99,7 +105,7 @@ export default function Home() {
       const emailCount = data.emails?.length || data.totalCount || 0;
       toast({
         title: "Emails Found",
-        description: `Found ${emailCount} email(s) from the last 24 hours.`,
+        description: `Found ${emailCount} Netflix email(s) from the last 24 hours.`,
       });
     },
     onError: (error) => {
@@ -200,7 +206,7 @@ export default function Home() {
             >
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">
-                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> email(s)
+                  Found <span className="text-primary font-semibold">{results.emails?.length || 0}</span> Netflix email(s)
                 </p>
               </div>
 
@@ -238,9 +244,8 @@ export default function Home() {
                   </div>
 
                   <div className="p-3">
-                    <EmailLinks 
-                      links={email.links} 
-                      accessCode={email.accessCode}
+                    <EmailContent 
+                      email={email}
                       emailId={email.id || index}
                     />
                   </div>
@@ -270,7 +275,7 @@ export default function Home() {
         </AnimatePresence>
 
         <p className="text-center text-xs text-neutral-600">
-          Searches emails from the last 24 hours
+          Searches Netflix emails from the last 24 hours
         </p>
       </motion.div>
     </div>
