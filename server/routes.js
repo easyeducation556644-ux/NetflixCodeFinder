@@ -37,51 +37,70 @@ function getLinkLabel(url) {
 }
 
 function isMainActionLink(url) {
-  const mainLinkPatterns = [
-    /netflix\.com\/account\/travel/i,
-    /netflix\.com\/account\/update/i,
-    /netflix\.com\/account\/confirm/i,
-    /netflix\.com\/account\/verify/i,
-    /netflix\.com\/password/i,
-    /netflix\.com\/loginhelp/i,
-    /netflix\.com\/dnr/i,
-    /netflix\.com\/YesItWasMe/i,
-    /netflix\.com\/NotMe/i,
-    /netflix\.com\/nflink/i,
-    /netflix\.com\/e\//i,
-    /accountaccess/i,
-    /device.*confirm/i,
-    /verify/i,
-    /confirm/i,
-    /reset/i,
-    /signin.*link/i,
-  ];
+  const urlLower = url.toLowerCase();
   
   const promotionalPatterns = [
-    /netflix\.com\/browse/i,
-    /netflix\.com\/title/i,
-    /netflix\.com\/watch/i,
-    /netflix\.com\/latest/i,
-    /netflix\.com\/tudum/i,
-    /netflix\.com\/about/i,
-    /netflix\.com\/jobs/i,
-    /netflix\.com\/legal/i,
-    /netflix\.com\/privacy/i,
-    /netflix\.com\/terms/i,
-    /help\.netflix\.com/i,
-    /media\.netflix\.com/i,
+    /browse/i,
+    /title/i,
+    /watch/i,
+    /latest/i,
+    /tudum/i,
+    /about/i,
+    /jobs/i,
+    /legal/i,
+    /privacy/i,
+    /terms/i,
+    /help\.netflix/i,
+    /media\.netflix/i,
     /unsubscribe/i,
     /mailto:/i,
+    /notification/i,
+    /settings/i,
   ];
   
   for (const pattern of promotionalPatterns) {
-    if (pattern.test(url)) {
+    if (pattern.test(urlLower)) {
       return false;
     }
   }
   
-  for (const pattern of mainLinkPatterns) {
-    if (pattern.test(url)) {
+  const mainActionKeywords = [
+    'yesitwasme',
+    'yes-it-was-me',
+    'yes_it_was_me',
+    'notme',
+    'not-me',
+    'not_me',
+    'wasntme',
+    'travel',
+    'temporary',
+    'getcode',
+    'get-code',
+    'get_code',
+    'account/travel',
+    'account/update',
+    'account/confirm',
+    'account/verify',
+    'password',
+    'loginhelp',
+    'login-help',
+    'dnr',
+    'nflink',
+    '/e/',
+    'accountaccess',
+    'verify',
+    'confirm',
+    'reset',
+    'signin',
+    'sign-in',
+    'activate',
+    'action',
+    'click.',
+    'email.netflix',
+  ];
+  
+  for (const keyword of mainActionKeywords) {
+    if (urlLower.includes(keyword)) {
       return true;
     }
   }
@@ -100,27 +119,19 @@ async function processContentWithLinks(html, text) {
     while ((hrefMatch = hrefRegex.exec(html)) !== null) {
       let url = hrefMatch[1];
       url = url.replace(/&amp;/g, "&");
+      const urlLower = url.toLowerCase();
       
-      if (url.includes("unsubscribe") || url.includes("mailto:") || url.includes("help.netflix") || url.includes("notification")) {
+      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms")) {
         continue;
       }
       
-      if (!seenUrls.has(url) && url.includes("netflix.com")) {
-        seenUrls.add(url);
+      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
+      
+      if (!seenUrls.has(urlLower) && isNetflixUrl) {
+        seenUrls.add(urlLower);
         
-        const hasActionKeyword = 
-          url.includes("/account") ||
-          url.includes("/password") ||
-          url.includes("/loginhelp") ||
-          url.includes("/dnr") ||
-          url.includes("/e/") ||
-          url.includes("YesItWasMe") ||
-          url.includes("NotMe") ||
-          url.includes("nflink") ||
-          url.includes("travel");
-        
-        if (hasActionKeyword) {
-          const label = getLinkLabel(url);
+        if (isMainActionLink(urlLower)) {
+          const label = getLinkLabel(urlLower);
           mainLinks.push({ type: "link", label, url, isMain: true });
         }
       }

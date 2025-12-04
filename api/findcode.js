@@ -14,30 +14,140 @@ async function translateToEnglish(text) {
 }
 
 function getLinkLabel(url) {
-  if (url.includes("netflix.com/account/travel")) {
-    return "Get Code";
-  } else if (url.includes("netflix.com/account")) {
+  const urlLower = url.toLowerCase();
+  
+  if (urlLower.includes("yesitwasme") || urlLower.includes("yes-it-was-me") || urlLower.includes("yes_it_was_me")) {
+    return "Yes, It Was Me";
+  } else if (urlLower.includes("notme") || urlLower.includes("not-me") || urlLower.includes("not_me") || urlLower.includes("wasntme")) {
+    return "No, It Wasn't Me";
+  } else if (urlLower.includes("travel") || urlLower.includes("temporary-access")) {
+    return "Get Temporary Access Code";
+  } else if (urlLower.includes("verify") || urlLower.includes("confirm")) {
+    return "Verify";
+  } else if (urlLower.includes("password") || urlLower.includes("reset")) {
+    return "Reset Password";
+  } else if (urlLower.includes("loginhelp") || urlLower.includes("login-help")) {
+    return "Login Help";
+  } else if (urlLower.includes("/account")) {
     return "Go to Account";
-  } else if (url.includes("netflix.com/password")) {
-    return "Change Password";
-  } else if (url.includes("netflix.com/help")) {
-    return "Help Center";
-  } else if (url.includes("netflix.com")) {
-    return "Open Netflix";
+  } else if (urlLower.includes("/e/") || urlLower.includes("nflink")) {
+    return "Open Link";
   }
   return "Open Link";
 }
 
+function isMainActionLink(url) {
+  const urlLower = url.toLowerCase();
+  
+  const promotionalPatterns = [
+    /browse/i,
+    /title/i,
+    /watch/i,
+    /latest/i,
+    /tudum/i,
+    /about/i,
+    /jobs/i,
+    /legal/i,
+    /privacy/i,
+    /terms/i,
+    /help\.netflix/i,
+    /media\.netflix/i,
+    /unsubscribe/i,
+    /mailto:/i,
+    /notification/i,
+    /settings/i,
+  ];
+  
+  for (const pattern of promotionalPatterns) {
+    if (pattern.test(urlLower)) {
+      return false;
+    }
+  }
+  
+  const mainActionKeywords = [
+    'yesitwasme',
+    'yes-it-was-me',
+    'yes_it_was_me',
+    'notme',
+    'not-me',
+    'not_me',
+    'wasntme',
+    'travel',
+    'temporary',
+    'getcode',
+    'get-code',
+    'get_code',
+    'account/travel',
+    'account/update',
+    'account/confirm',
+    'account/verify',
+    'password',
+    'loginhelp',
+    'login-help',
+    'dnr',
+    'nflink',
+    '/e/',
+    'accountaccess',
+    'verify',
+    'confirm',
+    'reset',
+    'signin',
+    'sign-in',
+    'activate',
+    'action',
+    'click.',
+    'email.netflix',
+  ];
+  
+  for (const keyword of mainActionKeywords) {
+    if (urlLower.includes(keyword)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 async function processContentWithLinks(html, text) {
-  const segments = [];
+  const mainLinks = [];
+  const seenUrls = new Set();
+  
+  if (html) {
+    const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
+    let hrefMatch;
+    
+    while ((hrefMatch = hrefRegex.exec(html)) !== null) {
+      let url = hrefMatch[1];
+      url = url.replace(/&amp;/g, "&");
+      const urlLower = url.toLowerCase();
+      
+      if (urlLower.includes("unsubscribe") || urlLower.includes("mailto:") || urlLower.includes("help.netflix") || urlLower.includes("notification") || urlLower.includes("privacy") || urlLower.includes("terms")) {
+        continue;
+      }
+      
+      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
+      
+      if (!seenUrls.has(urlLower) && isNetflixUrl) {
+        seenUrls.add(urlLower);
+        
+        if (isMainActionLink(urlLower)) {
+          const label = getLinkLabel(urlLower);
+          mainLinks.push({ type: "link", label, url, isMain: true });
+        }
+      }
+    }
+  }
+  
   let content = text || "";
   
-  if (html && !content) {
+  if (!content && html) {
     content = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
     content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    content = content.replace(/<a[^>]*>([^<]*)<\/a>/gi, "$1");
     content = content.replace(/<br\s*\/?>/gi, "\n");
     content = content.replace(/<\/p>/gi, "\n\n");
     content = content.replace(/<\/div>/gi, "\n");
+    content = content.replace(/<\/tr>/gi, "\n");
     content = content.replace(/<[^>]+>/g, " ");
     content = content.replace(/&nbsp;/gi, " ");
     content = content.replace(/&amp;/gi, "&");
@@ -49,59 +159,19 @@ async function processContentWithLinks(html, text) {
     content = content.replace(/&#\d+;/gi, "");
   }
   
+  content = content.replace(/https?:\/\/[^\s]+/gi, "");
   content = content.replace(/[ \t]+/g, " ");
   content = content.replace(/\n\s*\n\s*\n/g, "\n\n");
   content = content.trim();
   
-  const urlRegex = /\[?(https?:\/\/[^\s\[\]<>"']+)\]?/gi;
-  let lastIndex = 0;
-  let match;
+  const segments = [...mainLinks];
   
-  const seenUrls = new Set();
-  
-  while ((match = urlRegex.exec(content)) !== null) {
-    const url = match[1].replace(/['">\].,;:]+$/, "");
-    
-    if (url.includes("unsubscribe") || url.includes("mailto:")) {
-      continue;
-    }
-    
-    if (match.index > lastIndex) {
-      const textBefore = content.slice(lastIndex, match.index).trim();
-      if (textBefore) {
-        segments.push({ type: "text", value: textBefore });
-      }
-    }
-    
-    if (!seenUrls.has(url)) {
-      seenUrls.add(url);
-      const label = getLinkLabel(url);
-      segments.push({ type: "link", label, url });
-    }
-    
-    lastIndex = match.index + match[0].length;
+  if (content) {
+    const translated = await translateToEnglish(content);
+    segments.push({ type: "text", value: translated });
   }
   
-  if (lastIndex < content.length) {
-    const remainingText = content.slice(lastIndex).trim();
-    if (remainingText) {
-      segments.push({ type: "text", value: remainingText });
-    }
-  }
-  
-  const translatedSegments = await Promise.all(
-    segments.map(async (segment) => {
-      if (segment.type === "text") {
-        const translated = await translateToEnglish(segment.value);
-        return { type: "text", value: translated };
-      } else if (segment.type === "link") {
-        return segment;
-      }
-      return segment;
-    })
-  );
-  
-  return translatedSegments;
+  return segments;
 }
 
 function extractAccessCode(content) {
@@ -200,7 +270,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
               const emails = await Promise.all(emailPromises);
               
               const userEmailLower = userEmail.toLowerCase().trim();
-              const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
@@ -224,16 +293,13 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   );
                 });
 
-              const recentEmails = netflixEmails.filter((email) => {
-                const emailDate = new Date(email.date);
-                return emailDate >= twentyFourHoursAgo;
-              });
-
-              const sortedEmails = recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+              const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+              
+              const latestEmail = sortedEmails.length > 0 ? [sortedEmails[0]] : [];
 
               imap.end();
 
-              const formattedEmails = await Promise.all(sortedEmails.map(async (email) => {
+              const formattedEmails = await Promise.all(latestEmail.map(async (email) => {
                 const htmlContent = email.html || "";
                 const textContent = email.text || "";
                 const combinedContent = textContent + " " + htmlContent;
@@ -303,7 +369,7 @@ export default async function handler(req, res) {
       res.status(200).json({ emails: results, totalCount: results.length });
     } else {
       res.status(404).json({ 
-        error: "No Netflix email found for this address in the last 24 hours." 
+        error: "No Netflix email found for this address." 
       });
     }
   } catch (error) {
