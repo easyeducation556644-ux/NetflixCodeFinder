@@ -55,74 +55,72 @@
   max-width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  background-color: #262626 !important;
-  color: #f5f5f5 !important;
+  background-color: #1a1a1a !important;
+  color: #e5e5e5 !important;
+  padding: 20px;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
-.email-content-wrapper * {
-  background-color: transparent !important;
-  background: transparent !important;
-  color: #f5f5f5 !important;
+.email-content-wrapper p {
+  margin-bottom: 16px;
+  color: #e5e5e5 !important;
+  line-height: 1.7;
 }
 
-.email-content-wrapper table {
-  width: 100% !important;
-  max-width: 100% !important;
-  table-layout: fixed !important;
-  background-color: transparent !important;
-}
-
-.email-content-wrapper td,
-.email-content-wrapper th {
-  word-wrap: break-word !important;
-  overflow-wrap: break-word !important;
-  background-color: transparent !important;
-  color: #f5f5f5 !important;
-}
-
-.email-content-wrapper img {
-  max-width: 100% !important;
-  height: auto !important;
+.email-content-wrapper div {
+  color: #e5e5e5 !important;
 }
 
 .email-content-wrapper a {
-  color: #e53e3e !important;
-  text-decoration: underline;
+  display: inline-block;
+  background-color: #E50914 !important;
+  color: white !important;
+  padding: 12px 24px;
+  text-decoration: none !important;
+  border-radius: 4px;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
 }
 
 .email-content-wrapper a:hover {
-  color: #fc8181 !important;
+  background-color: #b8070f !important;
+  color: white !important;
 }
 
-.email-content-wrapper p,
-.email-content-wrapper div,
-.email-content-wrapper span,
 .email-content-wrapper h1,
 .email-content-wrapper h2,
-.email-content-wrapper h3,
-.email-content-wrapper h4,
-.email-content-wrapper h5,
-.email-content-wrapper h6 {
-  color: #f5f5f5 !important;
-  background-color: transparent !important;
+.email-content-wrapper h3 {
+  color: #ffffff !important;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.email-content-wrapper h1 {
+  font-size: 24px;
+}
+
+.email-content-wrapper h2 {
+  font-size: 20px;
+}
+
+.email-content-wrapper h3 {
+  font-size: 18px;
 }
 
 @media (max-width: 640px) {
   .email-content-wrapper {
-    font-size: 13px;
-    line-height: 1.5;
-  }
-  
-  .email-content-wrapper table {
-    font-size: 12px !important;
-  }
-  
-  .email-content-wrapper td,
-  .email-content-wrapper th {
-    padding: 4px !important;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 16px;
   }
   
   .email-content-wrapper p {
-    margin-bottom: 8px !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .email-content-wrapper a {
+    padding: 10px 20px;
+    font-size: 14px;
   }
 }

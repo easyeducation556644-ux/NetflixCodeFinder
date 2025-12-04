@@ -44,106 +44,222 @@ async function translateToEnglish(text) {
   }
 }
 
+function sanitizeUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  
+  const trimmedUrl = url.trim();
+  
+  // Parse the URL first
+  let urlObj;
+  try {
+    urlObj = new URL(trimmedUrl);
+  } catch (e) {
+    return null;
+  }
+  
+  // Only allow http and https protocols using URL object's protocol property
+  const protocol = urlObj.protocol.toLowerCase();
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    return null;
+  }
+  
+  // Decode the full URL to catch encoded dangerous protocols
+  let decodedUrl;
+  try {
+    decodedUrl = decodeURIComponent(trimmedUrl.toLowerCase());
+  } catch (e) {
+    decodedUrl = trimmedUrl.toLowerCase();
+  }
+  
+  // Block dangerous content even when encoded
+  const dangerousPatterns = [
+    'javascript:',
+    'data:',
+    'vbscript:',
+    '<script',
+    'onerror',
+    'onclick',
+    'onload',
+    'onmouseover',
+  ];
+  
+  for (const pattern of dangerousPatterns) {
+    if (decodedUrl.includes(pattern)) {
+      return null;
+    }
+  }
+  
+  // Strict allowlist of Netflix domains using exact domain matching
+  const hostname = urlObj.hostname.toLowerCase();
+  const allowedDomains = [
+    'netflix.com',
+    'www.netflix.com',
+    'nflxso.net',
+    'www.nflxso.net',
+    'email.netflix.com',
+    'click.netflix.com',
+  ];
+  
+  // Check for exact match or subdomain match
+  const isAllowed = allowedDomains.some(domain => {
+    return hostname === domain || hostname.endsWith('.' + domain);
+  });
+  
+  if (!isAllowed) {
+    return null;
+  }
+  
+  return trimmedUrl;
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function translateHtmlContent(html) {
   if (!html || html.trim() === "") return html;
   
-  const styleScriptBlocks = [];
-  let blockIndex = 0;
+  // Completely remove all style and script blocks - don't preserve them
+  let cleanHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  cleanHtml = cleanHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
   
-  let safeHtml = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, (match) => {
-    const placeholder = `___STYLE_BLOCK_${blockIndex}___`;
-    styleScriptBlocks.push({ placeholder, content: match });
-    blockIndex++;
-    return placeholder;
-  });
+  // Remove head section completely
+  cleanHtml = cleanHtml.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
   
-  safeHtml = safeHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, (match) => {
-    const placeholder = `___SCRIPT_BLOCK_${blockIndex}___`;
-    styleScriptBlocks.push({ placeholder, content: match });
-    blockIndex++;
-    return placeholder;
-  });
+  // Remove XML declarations and doctype
+  cleanHtml = cleanHtml.replace(/<\?xml[^>]*\?>/gi, '');
+  cleanHtml = cleanHtml.replace(/<!DOCTYPE[^>]*>/gi, '');
   
-  const textEntries = [];
-  let entryIndex = 0;
+  // Remove html and body tags but keep their content
+  cleanHtml = cleanHtml.replace(/<html[^>]*>/gi, '');
+  cleanHtml = cleanHtml.replace(/<\/html>/gi, '');
+  cleanHtml = cleanHtml.replace(/<body[^>]*>/gi, '');
+  cleanHtml = cleanHtml.replace(/<\/body>/gi, '');
   
-  safeHtml = safeHtml.replace(/>([^<]+)</g, (match, text) => {
-    const cleanText = text.replace(/\s+/g, ' ').trim();
+  // Remove all inline styles from elements  
+  cleanHtml = cleanHtml.replace(/\s*style\s*=\s*["'][^"']*["']/gi, '');
+  
+  // Remove bgcolor attributes
+  cleanHtml = cleanHtml.replace(/\s*bgcolor\s*=\s*["'][^"']*["']/gi, '');
+  
+  // Remove all CSS comments that might leak
+  cleanHtml = cleanHtml.replace(/\/\*[\s\S]*?\*\//g, '');
+  
+  // Remove any remaining @media or CSS declarations that leaked into text
+  cleanHtml = cleanHtml.replace(/@media[^{]*\{[^}]*\}/g, '');
+  cleanHtml = cleanHtml.replace(/@font-face[^{]*\{[^}]*\}/g, '');
+  
+  // Extract all text content for translation, preserving links
+  const linkPlaceholders = [];
+  let linkIndex = 0;
+  
+  // Preserve important links with placeholders
+  cleanHtml = cleanHtml.replace(/<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (match, url, linkText) => {
+    const urlLower = url.toLowerCase();
+    // Sanitize the URL first
+    const safeUrl = sanitizeUrl(url);
     
-    if (cleanText.length > 1 && 
-        !/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"]+$/.test(cleanText) &&
-        !cleanText.includes('___STYLE_BLOCK_') &&
-        !cleanText.includes('___SCRIPT_BLOCK_') &&
-        !/^https?:\/\//.test(cleanText) &&
-        !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanText)) {
-      const placeholder = `___TEXT_${entryIndex}___`;
-      textEntries.push({
-        placeholder,
-        originalText: text,
-        cleanText
-      });
-      entryIndex++;
-      return `>${placeholder}<`;
+    // Only keep Netflix action links that pass sanitization
+    if (safeUrl && urlLower.includes('netflix') && 
+        (urlLower.includes('yesitwasme') || urlLower.includes('yes-it-was-me') ||
+         urlLower.includes('account') || urlLower.includes('verify') ||
+         urlLower.includes('confirm') || urlLower.includes('travel'))) {
+      const placeholder = `___LINK_${linkIndex}___`;
+      const cleanLinkText = linkText.replace(/<[^>]+>/g, '').trim();
+      linkPlaceholders.push({ placeholder, url: safeUrl, text: cleanLinkText });
+      linkIndex++;
+      return placeholder;
     }
-    return match;
+    // For other links or unsafe URLs, just return the text
+    return linkText.replace(/<[^>]+>/g, '').trim();
   });
   
-  safeHtml = safeHtml.replace(/alt\s*=\s*["']([^"']+)["']/gi, (match, text) => {
-    const cleanText = text.trim();
-    if (cleanText.length > 1 && !/^[\s\d\W]+$/.test(cleanText)) {
-      const placeholder = `___ALT_${entryIndex}___`;
-      textEntries.push({
-        placeholder,
-        originalText: text,
-        cleanText,
-        isAlt: true
-      });
-      entryIndex++;
-      return `alt="${placeholder}"`;
-    }
-    return match;
-  });
+  // Extract text content, stripping remaining HTML
+  let textContent = cleanHtml
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#\d+;/gi, '')
+    .replace(/&shy;/gi, '')
+    .replace(/\u00AD/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
   
-  if (textEntries.length === 0) {
-    for (const block of styleScriptBlocks) {
-      safeHtml = safeHtml.replace(block.placeholder, block.content);
-    }
-    return safeHtml;
+  // Remove footer content
+  const footerPatterns = [
+    /we're here to help[\s\S]*/i,
+    /visit the help center[\s\S]*/i,
+    /the netflix team[\s\S]*/i,
+    /this message was sent to[\s\S]*/i,
+    /this message was mailed to[\s\S]*/i,
+    /netflix international[\s\S]*/i,
+    /need help\?[\s\S]*/i,
+    /questions\?[\s\S]*/i,
+  ];
+  
+  for (const pattern of footerPatterns) {
+    textContent = textContent.replace(pattern, '');
   }
   
-  console.log(`Found ${textEntries.length} text entries to translate`);
+  textContent = textContent.trim();
   
-  const textsToTranslate = textEntries.map(e => e.cleanText);
-  const translatedTexts = [];
-  
-  for (const text of textsToTranslate) {
-    try {
-      const result = await translatte(text, { to: 'en' });
-      translatedTexts.push(result.text || text);
-    } catch (e) {
-      console.error("Translation error for text:", text.substring(0, 50), e.message);
-      translatedTexts.push(text);
+  // Translate the text content
+  let translatedContent = textContent;
+  try {
+    if (textContent.length > 0 && textContent.length < 10000) {
+      console.log("Translating email content, length:", textContent.length);
+      translatedContent = await translateToEnglish(textContent);
     }
+  } catch (e) {
+    console.error("Translation error:", e.message);
   }
   
-  console.log(`Translated ${translatedTexts.length} texts`);
+  // Restore link placeholders with proper styled buttons
+  for (const link of linkPlaceholders) {
+    const translatedLinkText = await translateToEnglish(link.text || 'Click Here');
+    // Escape both the URL and link text to prevent XSS
+    const safeUrl = escapeHtml(link.url);
+    const safeLinkText = escapeHtml(translatedLinkText);
+    const buttonHtml = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #E50914; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: 600; margin: 10px 0;">${safeLinkText}</a>`;
+    translatedContent = translatedContent.replace(link.placeholder, buttonHtml);
+  }
   
-  for (let i = 0; i < textEntries.length; i++) {
-    const entry = textEntries[i];
-    const translated = translatedTexts[i] || entry.cleanText;
-    
-    if (entry.isAlt) {
-      safeHtml = safeHtml.replace(entry.placeholder, translated);
+  // Format content as clean HTML paragraphs
+  const paragraphs = translatedContent
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p && p.length > 0 && !p.match(/^[\s\d\.,;:!?\-_=+*#@$%^&()[\]{}|\\/<>'"]+$/));
+  
+  let formattedHtml = '';
+  for (const para of paragraphs) {
+    // Check if paragraph contains a link that was converted to button (already escaped)
+    if (para.includes('<a href=')) {
+      formattedHtml += `<div style="text-align: center; margin: 20px 0;">${para}</div>`;
     } else {
-      safeHtml = safeHtml.replace(entry.placeholder, translated);
+      // Escape text content paragraphs to prevent XSS
+      const safePara = escapeHtml(para);
+      formattedHtml += `<p style="margin-bottom: 16px; line-height: 1.6;">${safePara}</p>`;
     }
   }
   
-  for (const block of styleScriptBlocks) {
-    safeHtml = safeHtml.replace(block.placeholder, block.content);
-  }
-  
-  return safeHtml;
+  return formattedHtml;
 }
 
 function getLinkLabel(url) {
@@ -307,16 +423,20 @@ async function processContentWithLinks(html, text) {
         return plainText;
       }
       
-      const isNetflixUrl = urlLower.includes("netflix.com") || urlLower.includes("netflix") || urlLower.includes("nflx");
+      // Sanitize the URL first
+      const safeUrl = sanitizeUrl(url);
+      if (!safeUrl) {
+        return plainText;
+      }
       
-      if (isNetflixUrl && isMainActionLink(urlLower) && !seenUrls.has(urlLower)) {
+      if (isMainActionLink(urlLower) && !seenUrls.has(urlLower)) {
         seenUrls.add(urlLower);
         const label = getLinkLabel(urlLower);
         const category = categorizeLinkType(urlLower);
         const placeholder = `___LINK_PLACEHOLDER_${placeholderIndex}___`;
         linkPlaceholders.push({
           placeholder,
-          link: { type: "link", label, url, isMain: true, category }
+          link: { type: "link", label, url: safeUrl, isMain: true, category }
         });
         placeholderIndex++;
         return `\n${placeholder}\n`;
