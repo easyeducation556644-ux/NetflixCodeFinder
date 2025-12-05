@@ -1,5 +1,17 @@
 import Imap from "imap";
 import { simpleParser } from "mailparser";
+import translatte from "translatte";
+
+async function translateToEnglish(text) {
+  if (!text || text.trim() === "") return text;
+  
+  try {
+    const result = await translatte(text, { to: "en" });
+    return result.text;
+  } catch (error) {
+    return text;
+  }
+}
 
 function escapeHtml(text) {
   if (!text) return '';
@@ -188,8 +200,9 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               for (const email of sortedEmails) {
                 const subject = email.subject || "";
+                const translatedSubject = await translateToEnglish(subject);
                 
-                if (isHouseholdEmail(subject)) {
+                if (isHouseholdEmail(translatedSubject)) {
                   householdEmail = email;
                   break;
                 }
