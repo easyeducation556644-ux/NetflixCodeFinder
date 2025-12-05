@@ -641,6 +641,9 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               const userEmailLower = userEmail.toLowerCase().trim();
               
+              // Calculate the time 15 minutes ago
+              const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+              
               const basicFilteredEmails = emails
                 .filter((email) => email !== null)
                 .filter((email) => {
@@ -661,6 +664,11 @@ function searchNetflixEmails(imapConfig, userEmail) {
                     textContent.includes(userEmailLower) ||
                     htmlContent.includes(userEmailLower)
                   );
+                })
+                // Filter emails received within the last 15 minutes
+                .filter((email) => {
+                  const emailDate = new Date(email.date);
+                  return emailDate >= fifteenMinutesAgo;
                 });
 
               const sortedEmails = basicFilteredEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
