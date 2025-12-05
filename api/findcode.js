@@ -541,7 +541,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
             return resolve([]);
           }
 
-          const latestEmails = results.slice(-200);
+          const latestEmails = results.slice(-50);
           
           const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
           const emailPromises = [];
@@ -686,6 +686,8 @@ export default async function handler(req, res) {
     port: parseInt(process.env.EMAIL_PORT || "993", 10),
     tls: process.env.EMAIL_TLS !== "false",
     tlsOptions: { rejectUnauthorized: false },
+    connTimeout: 8000,
+    authTimeout: 5000,
   };
 
   if (!imapConfig.user || !imapConfig.password) {
