@@ -204,10 +204,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 }
               }
 
-              if (!householdEmail && sortedEmails.length > 0) {
-                householdEmail = sortedEmails[0];
-              }
-
               if (!householdEmail) {
                 resolve([]);
                 return;
