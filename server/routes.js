@@ -595,7 +595,10 @@ function searchNetflixEmails(imapConfig, userEmail) {
           return reject(err);
         }
 
-        imap.search(["ALL"], (err, results) => {
+        const today = new Date();
+        const searchDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        
+        imap.search([["SINCE", searchDate]], (err, results) => {
           if (err) {
             imap.end();
             return reject(err);
@@ -606,7 +609,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
             return resolve([]);
           }
 
-          const latestEmails = results.slice(-50);
+          const latestEmails = results;
           
           const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
           const emailPromises = [];
