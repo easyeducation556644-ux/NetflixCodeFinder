@@ -49,11 +49,7 @@ function sanitizeUrl(url) {
   return trimmedUrl;
 }
 
-function hasAccountLink(htmlContent) {
-  return /netflix\.com\/account/i.test(htmlContent);
-}
-
-function isHouseholdEmail(subject, htmlContent) {
+function isHouseholdEmail(subject) {
   const subjectLower = (subject || "").toLowerCase();
   
   const subjectKeywords = [
@@ -61,14 +57,10 @@ function isHouseholdEmail(subject, htmlContent) {
     "household", 
     "temp",
     "home",
-    "update",
-    "access",
-    "verify"
+    "access"
   ];
-  const hasKeyword = subjectKeywords.some(kw => subjectLower.includes(kw));
-  const hasLink = hasAccountLink(htmlContent);
   
-  return hasKeyword && hasLink;
+  return subjectKeywords.some(kw => subjectLower.includes(kw));
 }
 
 function getUserFriendlyError(error) {
@@ -196,9 +188,8 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               for (const email of sortedEmails) {
                 const subject = email.subject || "";
-                const htmlContent = email.html || "";
                 
-                if (isHouseholdEmail(subject, htmlContent)) {
+                if (isHouseholdEmail(subject)) {
                   householdEmail = email;
                   break;
                 }
