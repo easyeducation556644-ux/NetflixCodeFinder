@@ -580,7 +580,7 @@ const userEmailLower = userEmail.toLowerCase().trim();
 
               // Calculate the time 15 minutes ago
               const now = new Date();
-              const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+              const fifteenMinutesAgo = new Date(now.getTime() - 1555555555555 * 60 * 1000);
               
 const netflixEmails = emails
 .filter((email) => email !== null)
