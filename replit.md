@@ -146,6 +146,14 @@ For production deployment, use the Express server which properly handles IMAP co
 
 ## Recent Changes
 
+- **Multi-Language Support (Dec 2025)**: Added Google Translate widget with auto-detect language:
+  - Automatically detects user's browser language and translates the page
+  - Users from any country can view the website and email content in their native language
+  - Widget positioned in top-right corner for easy access
+- **HTML Entity Decoding (Dec 2025)**: Fixed HTML entity display issues:
+  - Added `decodeHtmlEntities()` function to convert `&#x27;`, `&#39;`, `&quot;` etc. to proper characters
+  - Email subjects and body content are now decoded before display
+- **Extended Email Search Window (Dec 2025)**: Changed email filtering from 15 minutes to 24 hours for testing purposes
 - **Email Display Preservation (Dec 2025)**: Fixed translateHtmlContent function to preserve original Netflix email layout:
   - Only removes script tags, keeps all inline styles and structure intact
   - White text color only applied to "Yes, it's me" URLs (yesitwasme variants) and "Get Code" URLs (containing both 'travel' AND 'temporary')
