@@ -154,11 +154,6 @@ export default function Home() {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
-      const form = event.target;
-      if (form && form.action) {
-        form.action = '';
-        form.target = '';
-      }
     }
     setResults(null);
     searchMutation.mutate(data);

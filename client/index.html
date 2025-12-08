@@ -100,18 +100,22 @@
         setTimeout(pollAndTranslate, 500);
       }
       
-      document.addEventListener('submit', function(e) {
-        var form = e.target;
-        if (form && form.tagName === 'FORM') {
-          if (form.action && form.action.includes('translate.googleusercontent.com')) {
-            form.action = 'javascript:void(0);';
-            form.target = '';
+      document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('submit', function(e) {
+          var form = e.target;
+          if (form && form.tagName === 'FORM') {
+            if (form.action && 
+                (form.action.includes('translate.googleusercontent.com') || 
+                 form.action.includes('translate.google.com'))) {
+              e.preventDefault();
+              e.stopPropagation();
+              form.action = 'javascript:void(0);';
+              form.target = '';
+              return false;
+            }
           }
-          if (form.action && form.action.endsWith('#')) {
-            form.action = 'javascript:void(0);';
-          }
-        }
-      }, true);
+        }, true);
+      });
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     

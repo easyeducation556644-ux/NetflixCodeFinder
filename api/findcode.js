@@ -578,10 +578,10 @@ const emails = await Promise.all(emailPromises);
 
 const userEmailLower = userEmail.toLowerCase().trim();
 
-              // Calculate the time 15 minutes ago
-              const now = new Date();
-              const fifteenMinutesAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-              
+// Filter emails from the last 1 year
+const now = new Date();
+const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+
 const netflixEmails = emails
 .filter((email) => email !== null)
 .filter((email) => {
@@ -601,11 +601,12 @@ ccAddresses.includes(userEmailLower) ||
 subject.includes(userEmailLower) ||
 htmlContent.includes(userEmailLower)
 );
-                })
-                // Filter emails received within the last 15 minutes
-                .filter((email) => {
-                  const emailDate = new Date(email.date);
-                  return emailDate >= fifteenMinutesAgo;
+})
+// Filter emails received within the last 1 year
+.filter((email) => {
+if (!email.date) return false;
+const emailDate = new Date(email.date);
+return emailDate >= oneYearAgo && emailDate <= now;
 });
 
 const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
