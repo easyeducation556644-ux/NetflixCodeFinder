@@ -23,6 +23,23 @@ function escapeHtml(text) {
     .replace(/'/g, '&#39;');
 }
 
+function decodeHtmlEntities(html) {
+  if (!html) return '';
+  return html
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x22;/g, '"')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x26;/g, '&')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x3C;/g, '<')
+    .replace(/&lt;/g, '<')
+    .replace(/&#x3E;/g, '>')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
 function sanitizeUrl(url) {
   if (!url || typeof url !== 'string') return null;
   
@@ -115,7 +132,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
         }
 
         const today = new Date();
-        const searchDate = new Date(today.getTime() - 60 * 60 * 1000);
+        const searchDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
         
         imap.search([
           ["SINCE", searchDate],
@@ -172,7 +189,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               const userEmailLower = userEmail.toLowerCase().trim();
               const now = new Date();
-              const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+              const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
@@ -189,7 +206,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 })
                 .filter((email) => {
                   const emailDate = new Date(email.date);
-                  return emailDate >= fifteenMinutesAgo;
+                  return emailDate >= twentyFourHoursAgo;
                 });
 
               const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -214,14 +231,15 @@ function searchNetflixEmails(imapConfig, userEmail) {
               }
 
               const htmlContent = householdEmail.html || "";
+              const decodedHtml = decodeHtmlEntities(htmlContent);
               
               const formattedEmail = {
                 id: householdEmail.messageId || `${Date.now()}-${Math.random()}`,
-                subject: householdEmail.subject || "Netflix Email",
+                subject: decodeHtmlEntities(householdEmail.subject || "Netflix Email"),
                 receivedAt: householdEmail.date ? householdEmail.date.toISOString() : new Date().toISOString(),
                 from: householdEmail.from?.text || "",
                 to: householdEmail.to?.text || "",
-                rawHtml: `<div class="netflix-email-original">${htmlContent}</div>`,
+                rawHtml: `<div class="netflix-email-original">${decodedHtml}</div>`,
               };
 
               resolve([formattedEmail]);
@@ -276,7 +294,7 @@ export async function registerRoutes(httpServer, app) {
         res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address in the last 15 minutes." 
+          error: "No Netflix email found for this address in the last 24 hours." 
         });
       }
     } catch (error) {

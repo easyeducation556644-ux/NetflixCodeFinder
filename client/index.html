@@ -23,8 +23,69 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'en',
+          autoDisplay: false,
+          layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+        }, 'google_translate_element');
+        
+        setTimeout(function() {
+          var userLang = navigator.language || navigator.userLanguage;
+          var langCode = userLang.split('-')[0];
+          
+          if (langCode !== 'en') {
+            var selectElement = document.querySelector('.goog-te-combo');
+            if (selectElement) {
+              selectElement.value = langCode;
+              selectElement.dispatchEvent(new Event('change'));
+            }
+          }
+        }, 1000);
+      }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    
+    <style>
+      .goog-te-banner-frame, .goog-te-balloon-frame {
+        display: none !important;
+      }
+      body {
+        top: 0 !important;
+      }
+      .goog-te-gadget {
+        font-family: inherit !important;
+      }
+      .goog-te-gadget-simple {
+        background-color: transparent !important;
+        border: 1px solid #404040 !important;
+        border-radius: 8px !important;
+        padding: 4px 8px !important;
+      }
+      .goog-te-gadget-simple span {
+        color: #a3a3a3 !important;
+      }
+      .goog-te-menu-value span {
+        color: #a3a3a3 !important;
+      }
+      .goog-te-banner-frame.skiptranslate {
+        display: none !important;
+      }
+      #google_translate_element {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 9999;
+      }
+      .VIpgJd-ZVi9od-l4eHX-hSRGPd {
+        display: none !important;
+      }
+    </style>
   </head>
   <body>
+    <div id="google_translate_element"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
