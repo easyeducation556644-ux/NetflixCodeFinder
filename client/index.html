@@ -32,24 +32,56 @@
           layout: google.translate.TranslateElement.InlineLayout.SIMPLE
         }, 'google_translate_element');
         
-        setTimeout(function() {
+        function pollAndTranslate() {
           var userLang = navigator.language || navigator.userLanguage;
           var langCode = userLang.split('-')[0];
           
-          if (langCode !== 'en') {
+          if (langCode === 'en') return;
+          
+          var attempts = 0;
+          var maxAttempts = 50;
+          
+          var interval = setInterval(function() {
+            attempts++;
             var selectElement = document.querySelector('.goog-te-combo');
-            if (selectElement) {
-              selectElement.value = langCode;
-              selectElement.dispatchEvent(new Event('change'));
+            
+            if (selectElement && selectElement.options.length > 1) {
+              var hasLang = Array.from(selectElement.options).some(function(opt) {
+                return opt.value === langCode;
+              });
+              
+              if (hasLang) {
+                selectElement.value = langCode;
+                var event = document.createEvent('HTMLEvents');
+                event.initEvent('change', true, true);
+                selectElement.dispatchEvent(event);
+                clearInterval(interval);
+              }
             }
-          }
-        }, 1000);
+            
+            if (attempts >= maxAttempts) {
+              clearInterval(interval);
+            }
+          }, 200);
+        }
+        
+        pollAndTranslate();
       }
+      
+      document.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (form && form.tagName === 'FORM') {
+          if (form.action && form.action.includes('translate.googleusercontent.com')) {
+            form.action = '';
+            form.target = '';
+          }
+        }
+      }, true);
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     
     <style>
-      .goog-te-banner-frame, .goog-te-balloon-frame {
+      .goog-te-banner-frame {
         display: none !important;
       }
       body {
@@ -57,30 +89,57 @@
       }
       .goog-te-gadget {
         font-family: inherit !important;
+        color: transparent !important;
       }
-      .goog-te-gadget-simple {
-        background-color: transparent !important;
+      .goog-te-gadget .goog-te-combo {
+        background-color: #1a1a1a !important;
         border: 1px solid #404040 !important;
         border-radius: 8px !important;
-        padding: 4px 8px !important;
+        padding: 8px 12px !important;
+        color: #e5e5e5 !important;
+        font-size: 13px !important;
+        font-family: 'Inter', sans-serif !important;
+        cursor: pointer !important;
+        outline: none !important;
+        min-width: 130px !important;
       }
-      .goog-te-gadget-simple span {
-        color: #a3a3a3 !important;
+      .goog-te-gadget .goog-te-combo:hover {
+        border-color: #e50914 !important;
+        background-color: #262626 !important;
       }
-      .goog-te-menu-value span {
-        color: #a3a3a3 !important;
+      .goog-te-gadget .goog-te-combo:focus {
+        border-color: #e50914 !important;
+        box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.2) !important;
       }
-      .goog-te-banner-frame.skiptranslate {
+      .goog-te-gadget > span {
         display: none !important;
       }
       #google_translate_element {
         position: fixed;
-        top: 10px;
-        right: 10px;
+        top: 12px;
+        right: 12px;
         z-index: 9999;
+        background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid #333;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+      #google_translate_element::before {
+        content: "🌐";
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 14px;
+        pointer-events: none;
       }
       .VIpgJd-ZVi9od-l4eHX-hSRGPd {
         display: none !important;
+      }
+      .goog-te-gadget-simple {
+        background-color: transparent !important;
+        border: none !important;
       }
     </style>
   </head>

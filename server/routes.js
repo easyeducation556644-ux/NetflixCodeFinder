@@ -150,7 +150,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
             return resolve([]);
           }
 
-          const latestEmails = results.slice(-20);
+          const latestEmails = results.slice(-100);
           
           const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
           const emailPromises = [];

@@ -150,7 +150,16 @@ export default function Home() {
     },
   });
 
-  function onSubmit(data) {
+  function onSubmit(data, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const form = event.target;
+      if (form && form.action) {
+        form.action = '';
+        form.target = '';
+      }
+    }
     setResults(null);
     searchMutation.mutate(data);
   }
@@ -187,7 +196,18 @@ export default function Home() {
           </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.target.action) {
+                  e.target.action = '';
+                  e.target.target = '';
+                }
+                form.handleSubmit(onSubmit)(e);
+              }} 
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="email"
