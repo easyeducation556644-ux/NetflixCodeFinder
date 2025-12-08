@@ -146,6 +146,15 @@ For production deployment, use the Express server which properly handles IMAP co
 
 ## Recent Changes
 
+- **Google Translate Fix (Dec 2025)**: Fixed blank page issue when using translation widget:
+  - Form now uses `translate="no"` attribute and `notranslate` class to prevent DOM rewriting
+  - Submit handler resets form action without blocking React's event handling
+  - IP-based country detection (via ipapi.co) for automatic translation on page load
+  - Widget restyled with white background for cleaner appearance
+- **Email Filtering Improvements (Dec 2025)**: Relaxed email filter to show more Netflix emails:
+  - Expanded keyword list to include: code, verify, verification, confirm, sign in, login, device, account, update, netflix
+  - Falls back to most recent Netflix email if no specific household/temporary keywords match
+  - Better error handling around subject translation
 - **Multi-Language Support (Dec 2025)**: Added Google Translate widget with auto-detect language:
   - Automatically detects user's browser language and translates the page
   - Users from any country can view the website and email content in their native language
