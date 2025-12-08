@@ -588,9 +588,9 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
               const userEmailLower = userEmail.toLowerCase().trim();
 
-              // Calculate the time 24 hours ago
+              // Calculate the time 1 year ago
               const now = new Date();
-              const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+              const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
@@ -612,10 +612,10 @@ function searchNetflixEmails(imapConfig, userEmail) {
                     htmlContent.includes(userEmailLower)
                   );
                 })
-                // Filter emails received within the last 24 hours
+                // Filter emails received within the last 1 year
                 .filter((email) => {
                   const emailDate = new Date(email.date);
-                  return emailDate >= twentyFourHoursAgo;
+                  return emailDate >= oneYearAgo;
                 });
 
               const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -714,7 +714,7 @@ export default async function handler(req, res) {
       res.status(200).json({ emails: results, totalCount: results.length });
     } else {
       res.status(404).json({ 
-        error: "No Netflix email found for this address in the last 24 hours." 
+        error: "No Netflix email found for this address." 
       });
     }
   } catch (error) {

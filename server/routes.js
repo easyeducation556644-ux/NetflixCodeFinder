@@ -131,7 +131,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
         }
 
         const today = new Date();
-        const searchDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        const searchDate = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
         
         imap.search([
           ["SINCE", searchDate]
@@ -187,7 +187,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               const userEmailLower = userEmail.toLowerCase().trim();
               const now = new Date();
-              const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+              const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
@@ -208,7 +208,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 })
                 .filter((email) => {
                   const emailDate = new Date(email.date);
-                  return emailDate >= twentyFourHoursAgo;
+                  return emailDate >= oneYearAgo;
                 });
 
               const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -302,7 +302,7 @@ export async function registerRoutes(httpServer, app) {
         res.json({ emails: results, totalCount: results.length });
       } else {
         res.status(404).json({ 
-          error: "No Netflix email found for this address in the last 24 hours." 
+          error: "No Netflix email found for this address." 
         });
       }
     } catch (error) {
