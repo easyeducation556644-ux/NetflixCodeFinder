@@ -134,8 +134,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
         const searchDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
         
         imap.search([
-          ["SINCE", searchDate],
-          ["FROM", "netflix"]
+          ["SINCE", searchDate]
         ], (err, results) => {
           if (err) {
             clearTimeout(timeoutId);
@@ -149,7 +148,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
             return resolve([]);
           }
 
-          const latestEmails = results.slice(-100);
+          const latestEmails = results.slice(-200);
           
           const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
           const emailPromises = [];
@@ -192,6 +191,10 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               const netflixEmails = emails
                 .filter((email) => email !== null)
+                .filter((email) => {
+                  const fromAddress = (email.from?.text || "").toLowerCase();
+                  return fromAddress.includes("netflix");
+                })
                 .filter((email) => {
                   const toAddresses = (email.to?.text || "").toLowerCase();
                   const ccAddresses = (email.cc?.text || "").toLowerCase();
