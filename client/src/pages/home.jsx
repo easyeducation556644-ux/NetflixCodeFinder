@@ -206,7 +206,9 @@ export default function Home() {
                 }
                 form.handleSubmit(onSubmit)(e);
               }} 
-              className="space-y-4"
+              className="space-y-4 notranslate"
+              translate="no"
+              action="javascript:void(0);"
             >
               <FormField
                 control={form.control}

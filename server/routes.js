@@ -86,7 +86,17 @@ function isHouseholdEmail(subject) {
     "household", 
     "temp",
     "home",
-    "access"
+    "access",
+    "code",
+    "verify",
+    "verification",
+    "confirm",
+    "sign in",
+    "login",
+    "device",
+    "account",
+    "update",
+    "netflix"
   ];
   
   return subjectKeywords.some(kw => subjectLower.includes(kw));
@@ -217,12 +227,22 @@ function searchNetflixEmails(imapConfig, userEmail) {
               
               for (const email of sortedEmails) {
                 const subject = email.subject || "";
-                const translatedSubject = await translateToEnglish(subject);
+                let translatedSubject = subject;
                 
-                if (isHouseholdEmail(translatedSubject)) {
+                try {
+                  translatedSubject = await translateToEnglish(subject);
+                } catch (e) {
+                  translatedSubject = subject;
+                }
+                
+                if (isHouseholdEmail(translatedSubject) || isHouseholdEmail(subject)) {
                   householdEmail = email;
                   break;
                 }
+              }
+
+              if (!householdEmail && sortedEmails.length > 0) {
+                householdEmail = sortedEmails[0];
               }
 
               if (!householdEmail) {
