@@ -85,18 +85,7 @@ function isHouseholdEmail(subject) {
     "temporary",
     "household", 
     "temp",
-    "home",
-    "access",
-    "code",
-    "verify",
-    "verification",
-    "confirm",
-    "sign in",
-    "login",
-    "device",
-    "account",
-    "update",
-    "netflix"
+    "home"
   ];
   
   return subjectKeywords.some(kw => subjectLower.includes(kw));
@@ -239,10 +228,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   householdEmail = email;
                   break;
                 }
-              }
-
-              if (!householdEmail && sortedEmails.length > 0) {
-                householdEmail = sortedEmails[0];
               }
 
               if (!householdEmail) {
