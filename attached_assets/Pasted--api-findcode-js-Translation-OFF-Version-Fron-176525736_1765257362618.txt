@@ -1,11 +1,10 @@
 // ============================================
-// api/findcode.js - Translation ONLY for Keyword Matching
-// HTML remains original for Google Translate
+// api/findcode.js - Translation OFF Version
+// Frontend Google Translate দিয়ে translate হবে
 // ============================================
 
 import Imap from "imap";
 import { simpleParser } from "mailparser";
-import translatte from "translatte";
 
 function escapeHtml(text) {
   if (!text) return '';
@@ -34,37 +33,15 @@ function decodeHtmlEntities(html) {
     .replace(/&nbsp;/g, ' ');
 }
 
-// Translation ONLY for keyword detection (Python bot style)
-async function translateForKeywordCheck(text) {
-  if (!text || text.trim() === "") return text;
-  
-  try {
-    // Short text - direct translation
-    if (text.length < 500) {
-      const result = await translatte(text, { to: "en" });
-      return result.text;
-    }
-    
-    // Long text - just take first 200 chars for keyword check
-    const shortText = text.substring(0, 200);
-    const result = await translatte(shortText, { to: "en" });
-    return result.text;
-  } catch (error) {
-    console.log('Translation failed, using original:', error.message);
-    return text;
-  }
-}
-
 function hasAccountLink(htmlContent) {
   return /netflix\.com\/account/i.test(htmlContent);
 }
 
-// Python bot style: fuzzy keyword matching
-async function isHouseholdEmail(originalSubject, htmlContent) {
-  const originalLower = (originalSubject || "").toLowerCase();
+function isHouseholdEmail(subject, htmlContent) {
+  const subjectLower = (subject || "").toLowerCase();
   
-  // English keywords for matching
-  const englishKeywords = [
+  // Python bot থেকে নেওয়া keywords
+  const subjectKeywords = [
     "temporary",
     "household", 
     "temp",
@@ -72,46 +49,20 @@ async function isHouseholdEmail(originalSubject, htmlContent) {
     "traveling",
     "travel",
     "access",
-    "verify"
+    // অন্য ভাষার common words
+    "temporário",  // Portuguese
+    "temporaire",  // French
+    "temporal",    // Spanish
+    "geçici",      // Turkish
+    "임시",        // Korean
+    "一時的",      // Japanese
+    "临时"         // Chinese
   ];
   
-  // Check 1: Original subject (if already English)
-  const hasKeywordInOriginal = englishKeywords.some(kw => originalLower.includes(kw));
-  
-  if (hasKeywordInOriginal) {
-    const hasLink = hasAccountLink(htmlContent);
-    console.log('✓ Keyword found in original subject:', originalSubject.substring(0, 60));
-    return hasLink;
-  }
-  
-  // Check 2: Translate subject and check again (Python bot approach)
-  try {
-    const translatedSubject = await translateForKeywordCheck(originalSubject);
-    const translatedLower = translatedSubject.toLowerCase();
-    
-    console.log('Translated subject:', {
-      original: originalSubject.substring(0, 50),
-      translated: translatedSubject.substring(0, 50)
-    });
-    
-    const hasKeywordInTranslated = englishKeywords.some(kw => translatedLower.includes(kw));
-    
-    if (hasKeywordInTranslated) {
-      const hasLink = hasAccountLink(htmlContent);
-      const matchedKeyword = englishKeywords.find(kw => translatedLower.includes(kw));
-      
-      console.log('✓ Keyword found after translation:', {
-        keyword: matchedKeyword,
-        hasLink: hasLink
-      });
-      
-      return hasLink;
-    }
-  } catch (e) {
-    console.log('Translation error, skipping:', e.message);
-  }
-  
-  return false;
+  const hasKeyword = subjectKeywords.some(kw => subjectLower.includes(kw));
+  const hasLink = hasAccountLink(htmlContent);
+
+  return hasKeyword && hasLink;
 }
 
 function getUserFriendlyError(error) {
@@ -147,7 +98,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
           return reject(err);
         }
 
-        // Python bot: 1 day ago
+        // Python bot এর মতো: 1 day ago
         const oneDayAgo = new Date();
         oneDayAgo.setDate(oneDayAgo.getDate() - 1);
         
@@ -244,7 +195,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
               let householdEmail = null;
 
-              // Check emails - translate subject for keyword matching
+              // Check emails for household keywords
               for (const email of sortedEmails) {
                 const subject = email.subject || "";
                 const htmlContent = email.html || "";
@@ -254,8 +205,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   date: email.date ? new Date(email.date).toISOString() : 'no date'
                 });
 
-                // TRANSLATE SUBJECT + CHECK KEYWORDS (Python bot approach)
-                if (await isHouseholdEmail(subject, htmlContent)) {
+                if (isHouseholdEmail(subject, htmlContent)) {
                   householdEmail = email;
                   console.log('✓ Found household email!');
                   break;
@@ -278,8 +228,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 return;
               }
 
-              // Return ORIGINAL HTML (no translation)
-              // Google Translate will handle frontend translation
+              // NO TRANSLATION - Send original HTML
               const htmlContent = householdEmail.html || "";
               const decodedHtml = decodeHtmlEntities(htmlContent);
 
@@ -289,7 +238,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 receivedAt: householdEmail.date ? householdEmail.date.toISOString() : new Date().toISOString(),
                 from: householdEmail.from?.text || "",
                 to: householdEmail.to?.text || "",
-                // ORIGINAL HTML - Google Translate will handle frontend
                 rawHtml: `<div class="netflix-email-original">${decodedHtml}</div>`,
               };
 
