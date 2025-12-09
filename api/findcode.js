@@ -307,11 +307,20 @@ const subjectKeywords = [
 "temporary",
 "household", 
 "temp",
-"home"
+"home",
+"access",
+"code",
+"verify"
 ];
-const hasKeyword = subjectKeywords.some(kw => subject.includes(kw));
 
+const hasKeyword = subjectKeywords.some(kw => subject.includes(kw));
 const hasLink = hasAccountLink(htmlContent);
+
+console.log('isHouseholdEmail check:', {
+subject: subject,
+hasKeyword: hasKeyword,
+hasLink: hasLink
+});
 
 return hasKeyword && hasLink;
 }
@@ -530,17 +539,31 @@ imap.end();
 return reject(err);
 }
 
-imap.search(["ALL"], (err, results) => {
+// Calculate 1 year ago date for IMAP search
+const oneYearAgo = new Date();
+oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+console.log('Searching emails since:', oneYearAgo.toISOString());
+
+// IMAP search with date filter and Netflix sender
+imap.search([
+['SINCE', oneYearAgo],
+['FROM', 'netflix']
+], (err, results) => {
 if (err) {
+console.error('IMAP search error:', err);
 imap.end();
 return reject(err);
 }
+
+console.log('IMAP search results:', results ? results.length : 0);
 
 if (!results || results.length === 0) {
 imap.end();
 return resolve([]);
 }
 
+// Get last 200 emails
 const latestEmails = results.slice(-200);
 
 const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
@@ -568,6 +591,7 @@ emailPromises.push(emailPromise);
 });
 
 fetch.once("error", (err) => {
+console.error('Fetch error:', err);
 imap.end();
 reject(err);
 });
@@ -575,12 +599,11 @@ reject(err);
 fetch.once("end", async () => {
 try {
 const emails = await Promise.all(emailPromises);
+console.log('Total emails parsed:', emails.filter(e => e !== null).length);
 
 const userEmailLower = userEmail.toLowerCase().trim();
-
-// Filter emails from the last 1 year
 const now = new Date();
-const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+const oneYearAgoFilter = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
 const netflixEmails = emails
 .filter((email) => email !== null)
@@ -591,23 +614,23 @@ return fromAddress.includes("netflix");
 .filter((email) => {
 const toAddresses = (email.to?.text || "").toLowerCase();
 const ccAddresses = (email.cc?.text || "").toLowerCase();
-const subject = (email.subject || "").toLowerCase();
-const textContent = (email.text || "").toLowerCase();
 const htmlContent = (email.html || "").toLowerCase();
 
-return (
+const hasUserEmail = 
 toAddresses.includes(userEmailLower) ||
 ccAddresses.includes(userEmailLower) ||
-subject.includes(userEmailLower) ||
-htmlContent.includes(userEmailLower)
-);
+htmlContent.includes(userEmailLower);
+
+return hasUserEmail;
 })
-// Filter emails received within the last 1 year
 .filter((email) => {
 if (!email.date) return false;
 const emailDate = new Date(email.date);
-return emailDate >= oneYearAgo && emailDate <= now;
+const isInRange = emailDate >= oneYearAgoFilter && emailDate <= now;
+return isInRange;
 });
+
+console.log('Filtered Netflix emails:', netflixEmails.length);
 
 const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -621,13 +644,21 @@ const htmlContent = email.html || "";
 
 const translatedSubject = await translateToEnglish(subject);
 
+console.log('Checking email:', {
+subject: subject,
+translated: translatedSubject,
+date: email.date
+});
+
 if (isHouseholdEmail(translatedSubject, htmlContent)) {
 householdEmail = email;
+console.log('Found household email!');
 break;
 }
 }
 
 if (!householdEmail) {
+console.log('No household email found');
 resolve([]);
 return;
 }
@@ -639,6 +670,7 @@ let translatedHtml = htmlContent;
 try {
 translatedHtml = await translateHtmlContentPreserveOriginal(htmlContent);
 } catch (e) {
+console.error('Translation error:', e);
 translatedHtml = htmlContent;
 }
 

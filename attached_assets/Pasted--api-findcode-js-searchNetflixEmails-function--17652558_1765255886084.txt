@@ -1,0 +1,210 @@
+// ============================================
+// api/findcode.js - searchNetflixEmails function
+// Line 385 থেকে শুরু - পুরো function টা replace করুন
+// ============================================
+
+function searchNetflixEmails(imapConfig, userEmail) {
+  return new Promise((resolve, reject) => {
+    const imap = new Imap(imapConfig);
+
+    imap.once("ready", () => {
+      imap.openBox("INBOX", true, (err, box) => {
+        if (err) {
+          imap.end();
+          return reject(err);
+        }
+
+        // ১ বছর আগের date calculate করুন
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        
+        console.log('Searching emails since:', oneYearAgo.toISOString());
+
+        // IMAP search with date filter
+        imap.search([
+          ['SINCE', oneYearAgo],
+          ['FROM', 'netflix']
+        ], (err, results) => {
+          if (err) {
+            console.error('IMAP search error:', err);
+            imap.end();
+            return reject(err);
+          }
+
+          console.log('IMAP search results:', results ? results.length : 0);
+
+          if (!results || results.length === 0) {
+            imap.end();
+            return resolve([]);
+          }
+
+          // শেষ 200টা email নিন
+          const latestEmails = results.slice(-200);
+
+          const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
+          const emailPromises = [];
+
+          fetch.on("message", (msg, seqno) => {
+            const emailPromise = new Promise((resolveEmail) => {
+              let emailData = null;
+
+              msg.on("body", (stream, info) => {
+                simpleParser(stream, (err, parsed) => {
+                  if (err) {
+                    resolveEmail(null);
+                    return;
+                  }
+                  emailData = parsed;
+                });
+              });
+
+              msg.once("end", () => {
+                setTimeout(() => resolveEmail(emailData), 100);
+              });
+            });
+            emailPromises.push(emailPromise);
+          });
+
+          fetch.once("error", (err) => {
+            console.error('Fetch error:', err);
+            imap.end();
+            reject(err);
+          });
+
+          fetch.once("end", async () => {
+            try {
+              const emails = await Promise.all(emailPromises);
+              console.log('Total emails parsed:', emails.filter(e => e !== null).length);
+
+              const userEmailLower = userEmail.toLowerCase().trim();
+              const now = new Date();
+              const oneYearAgoFilter = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+              
+              const netflixEmails = emails
+                .filter((email) => email !== null)
+                .filter((email) => {
+                  const fromAddress = (email.from?.text || "").toLowerCase();
+                  return fromAddress.includes("netflix");
+                })
+                .filter((email) => {
+                  const toAddresses = (email.to?.text || "").toLowerCase();
+                  const ccAddresses = (email.cc?.text || "").toLowerCase();
+                  const htmlContent = (email.html || "").toLowerCase();
+
+                  const hasUserEmail = 
+                    toAddresses.includes(userEmailLower) ||
+                    ccAddresses.includes(userEmailLower) ||
+                    htmlContent.includes(userEmailLower);
+                  
+                  return hasUserEmail;
+                })
+                .filter((email) => {
+                  if (!email.date) return false;
+                  const emailDate = new Date(email.date);
+                  const isInRange = emailDate >= oneYearAgoFilter && emailDate <= now;
+                  return isInRange;
+                });
+
+              console.log('Filtered Netflix emails:', netflixEmails.length);
+
+              const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+              imap.end();
+
+              let householdEmail = null;
+
+              for (const email of sortedEmails) {
+                const subject = email.subject || "";
+                const htmlContent = email.html || "";
+
+                const translatedSubject = await translateToEnglish(subject);
+                
+                console.log('Checking email:', {
+                  subject: subject,
+                  translated: translatedSubject,
+                  date: email.date
+                });
+
+                if (isHouseholdEmail(translatedSubject, htmlContent)) {
+                  householdEmail = email;
+                  console.log('Found household email!');
+                  break;
+                }
+              }
+
+              if (!householdEmail) {
+                console.log('No household email found');
+                resolve([]);
+                return;
+              }
+
+              const htmlContent = householdEmail.html || "";
+              const translatedSubject = await translateToEnglish(householdEmail.subject || "Email");
+
+              let translatedHtml = htmlContent;
+              try {
+                translatedHtml = await translateHtmlContentPreserveOriginal(htmlContent);
+              } catch (e) {
+                console.error('Translation error:', e);
+                translatedHtml = htmlContent;
+              }
+
+              const formattedEmail = {
+                id: householdEmail.messageId || `${Date.now()}-${Math.random()}`,
+                subject: translatedSubject,
+                receivedAt: householdEmail.date ? householdEmail.date.toISOString() : new Date().toISOString(),
+                from: householdEmail.from?.text || "",
+                to: householdEmail.to?.text || "",
+                rawHtml: translatedHtml,
+              };
+
+              console.log('Returning email:', formattedEmail.subject);
+              resolve([formattedEmail]);
+            } catch (parseError) {
+              console.error('Parse error:', parseError);
+              imap.end();
+              reject(parseError);
+            }
+          });
+        });
+      });
+    });
+
+    imap.once("error", (err) => {
+      console.error('IMAP connection error:', err);
+      reject(err);
+    });
+
+    imap.connect();
+  });
+}
+
+// ============================================
+// IMPORTANT: isHouseholdEmail function check করুন
+// Line 340-350 এর কাছাকাছি এটা আছে কিনা verify করুন
+// ============================================
+
+function isHouseholdEmail(translatedSubject, htmlContent) {
+  const subject = (translatedSubject || "").toLowerCase();
+
+  const subjectKeywords = [
+    "temporary",
+    "household", 
+    "temp",
+    "home",
+    "access",
+    "code",
+    "verify"
+  ];
+  
+  const hasKeyword = subjectKeywords.some(kw => subject.includes(kw));
+  const hasLink = hasAccountLink(htmlContent);
+
+  console.log('isHouseholdEmail check:', {
+    subject: subject,
+    hasKeyword: hasKeyword,
+    hasLink: hasLink
+  });
+
+  return hasKeyword && hasLink;
+}
