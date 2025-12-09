@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,10 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-
-const formSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address." }),
-});
+import { useLanguage } from "@/hooks/use-language";
 
 function ContentSegments({ segments, emailId }) {
   if (!segments || segments.length === 0) {
@@ -112,7 +109,12 @@ function EmailContent({ email, emailId }) {
 
 export default function Home() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [results, setResults] = useState(null);
+
+  const formSchema = useMemo(() => z.object({
+    email: z.string().email({ message: t.validEmailError }),
+  }), [t]);
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -139,10 +141,9 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setResults(data);
-      const emailCount = data.emails?.length || data.totalCount || 0;
       toast({
-        title: "Email Found",
-        description: `Found the latest Netflix email.`,
+        title: t.emailFound,
+        description: t.foundLatestEmail,
       });
     },
     onError: (error) => {
@@ -170,10 +171,10 @@ export default function Home() {
       >
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold text-primary tracking-wider font-display">
-            CODE GETTER
+            {t.title}
           </h1>
           <p className="text-neutral-500 text-sm">
-            Netflix Household Access & Temporary Codes
+            {t.subtitle}
           </p>
         </div>
 
@@ -184,9 +185,9 @@ export default function Home() {
           className="bg-neutral-900 rounded-xl p-6 border border-neutral-800"
         >
           <div className="text-center mb-5">
-            <h2 className="text-lg font-medium text-white">Find Latest Email</h2>
+            <h2 className="text-lg font-medium text-white">{t.findLatestEmail}</h2>
             <p className="text-neutral-500 text-xs mt-1">
-              Enter the email to search for the latest Netflix email
+              {t.enterEmailDescription}
             </p>
           </div>
 
@@ -210,12 +211,12 @@ export default function Home() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-white text-base font-bold">Enter Netflix Email</FormLabel>
+                    <FormLabel className="text-white text-base font-bold">{t.enterNetflixEmail}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
                         <Input 
-                          placeholder="user@example.com" 
+                          placeholder={t.emailPlaceholder} 
                           className="pl-10 h-10 bg-neutral-800 border-neutral-700 rounded-lg text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary" 
                           {...field} 
                           data-testid="input-email"
@@ -236,12 +237,12 @@ export default function Home() {
                 {searchMutation.isPending ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Searching...
+                    {t.searching}
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
                     <Search className="h-4 w-4" />
-                    Find Code
+                    {t.findCode}
                   </span>
                 )}
               </Button>
@@ -260,7 +261,7 @@ export default function Home() {
             >
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">
-                  Latest Netflix email
+                  {t.latestNetflixEmail}
                 </p>
               </div>
 
@@ -319,7 +320,7 @@ export default function Home() {
                 <AlertCircle className="w-4 h-4 text-red-400" />
               </div>
               <div>
-                <h3 className="text-red-400 font-medium text-sm">Search Failed</h3>
+                <h3 className="text-red-400 font-medium text-sm">{t.searchFailed}</h3>
                 <p className="text-neutral-500 text-xs mt-0.5">
                   {searchMutation.error.message}
                 </p>
@@ -329,7 +330,7 @@ export default function Home() {
         </AnimatePresence>
 
         <p className="text-center text-xs text-neutral-600">
-          Shows the latest Netflix email only
+          {t.showsLatestOnly}
         </p>
       </motion.div>
     </div>
