@@ -201,15 +201,47 @@ export function detectLanguageFromCountry(countryCode) {
   return 'en';
 }
 
-export async function detectCountry() {
-  try {
-    const response = await fetch('https://ipapi.co/json/', { 
-      signal: AbortSignal.timeout(3000) 
-    });
-    const data = await response.json();
-    return data.country_code || null;
-  } catch (e) {
-    console.log('IP detection failed');
-    return null;
+export function detectLanguageFromBrowser() {
+  const browserLang = navigator.language || navigator.userLanguage || 'en';
+  const langCode = browserLang.split('-')[0].toLowerCase();
+  
+  const supportedLang = LANGUAGES.find(l => l.code === langCode);
+  if (supportedLang) {
+    return supportedLang.code;
   }
+  
+  return 'en';
+}
+
+export async function detectCountry() {
+  const ipApis = [
+    { url: 'https://ipwho.is/', field: 'country_code' },
+    { url: 'https://api.country.is/', field: 'country' },
+    { url: 'https://ipapi.co/json/', field: 'country_code' }
+  ];
+
+  for (const api of ipApis) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch(api.url, { 
+        signal: controller.signal 
+      });
+      clearTimeout(timeoutId);
+      
+      const data = await response.json();
+      const country = data[api.field];
+      
+      if (country) {
+        console.log('Detected country:', country, 'from', api.url);
+        return country;
+      }
+    } catch (e) {
+      console.log('IP API failed:', api.url);
+    }
+  }
+  
+  console.log('All IP detection failed, using browser language');
+  return null;
 }

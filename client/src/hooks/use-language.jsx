@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { getTranslations, detectLanguageFromCountry, detectCountry, LANGUAGES } from "@/lib/translations";
+import { getTranslations, detectLanguageFromCountry, detectCountry, detectLanguageFromBrowser, LANGUAGES } from "@/lib/translations";
 
 const LanguageContext = createContext(null);
 
@@ -14,19 +14,31 @@ export function LanguageProvider({ children }) {
 
   useEffect(() => {
     async function init() {
+      const LANG_VERSION = 'v2';
+      const savedVersion = localStorage.getItem('lang-version');
       const savedLang = localStorage.getItem('preferred-language');
-      if (savedLang) {
+      
+      if (savedLang && savedVersion === LANG_VERSION) {
         setLanguage(savedLang);
         setIsLoading(false);
         return;
       }
 
+      console.log('Detecting language...');
       const country = await detectCountry();
+      let detectedLang = 'en';
+      
       if (country) {
-        const detectedLang = detectLanguageFromCountry(country);
-        setLanguage(detectedLang);
-        localStorage.setItem('preferred-language', detectedLang);
+        detectedLang = detectLanguageFromCountry(country);
+        console.log('Language from country:', detectedLang, '(country:', country, ')');
+      } else {
+        detectedLang = detectLanguageFromBrowser();
+        console.log('Language from browser:', detectedLang);
       }
+      
+      setLanguage(detectedLang);
+      localStorage.setItem('preferred-language', detectedLang);
+      localStorage.setItem('lang-version', LANG_VERSION);
       setIsLoading(false);
     }
 
