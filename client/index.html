@@ -1,185 +1,312 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    
-    <title>Netflix Code Getter - Household Access Codes</title>
-    <meta name="description" content="Simple tool to retrieve Netflix household and temporary access codes." />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  
+  <title>Netflix Code Getter - Household Access Codes</title>
+  <meta name="description" content="Simple tool to retrieve Netflix household and temporary access codes." />
 
-    <meta property="og:title" content="Netflix Code Getter" />
-    <meta property="og:description" content="Simple tool to retrieve Netflix household and temporary access codes." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://netflix-code-finder.vercel.app/" />
-    <meta property="og:image" content="https://netflix-code-finder.vercel.app/og-image.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="675" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Google Translate Widget - Hidden but functional */
+    #google_translate_element {
+      position: fixed;
+      top: -9999px;
+      left: -9999px;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
     
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Netflix Code Getter" />
-    <meta name="twitter:description" content="Simple tool to retrieve Netflix household and temporary access codes." />
-    <meta name="twitter:image" content="https://netflix-code-finder.vercel.app/og-image.png" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    .goog-te-banner-frame,
+    .goog-te-menu-value span,
+    .goog-te-gadget span,
+    .VIpgJd-ZVi9od-l4eHX-hSRGPd {
+      display: none !important;
+    }
     
-    <script type="text/javascript">
-      var detectedLangCode = null;
-      
-      var countryToLang = {
-        'BD': 'bn', 'IN': 'hi', 'PK': 'ur', 'CN': 'zh-CN', 'JP': 'ja', 'KR': 'ko',
-        'DE': 'de', 'FR': 'fr', 'ES': 'es', 'IT': 'it', 'PT': 'pt', 'BR': 'pt',
-        'RU': 'ru', 'TR': 'tr', 'AR': 'ar', 'SA': 'ar', 'AE': 'ar', 'TH': 'th',
-        'VN': 'vi', 'ID': 'id', 'MY': 'ms', 'PH': 'tl', 'NL': 'nl', 'PL': 'pl',
-        'SE': 'sv', 'NO': 'no', 'FI': 'fi', 'DK': 'da', 'GR': 'el', 'IL': 'iw',
-        'UA': 'uk', 'CZ': 'cs', 'HU': 'hu', 'RO': 'ro', 'NP': 'ne', 'LK': 'si'
-      };
-      
-      (function() {
-        try {
-          fetch('https://ipapi.co/json/', { timeout: 3000 })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-              if (data && data.country_code) {
-                var lang = countryToLang[data.country_code];
-                if (lang && lang !== 'en') {
-                  detectedLangCode = lang;
-                }
-              }
-            })
-            .catch(function() {
-              var userLang = navigator.language || navigator.userLanguage;
-              detectedLangCode = userLang.split('-')[0];
-            });
-        } catch(e) {
-          var userLang = navigator.language || navigator.userLanguage;
-          detectedLangCode = userLang.split('-')[0];
-        }
-      })();
-
-      function googleTranslateElementInit() {
-        new google.translate.TranslateElement({
-          pageLanguage: 'en',
-          autoDisplay: false,
-          layout: google.translate.TranslateElement.InlineLayout.SIMPLE
-        }, 'google_translate_element');
-        
-        function pollAndTranslate() {
-          var langCode = detectedLangCode || (navigator.language || navigator.userLanguage).split('-')[0];
-          
-          if (!langCode || langCode === 'en') return;
-          
-          var attempts = 0;
-          var maxAttempts = 50;
-          
-          var interval = setInterval(function() {
-            attempts++;
-            var selectElement = document.querySelector('.goog-te-combo');
-            
-            if (selectElement && selectElement.options.length > 1) {
-              var hasLang = Array.from(selectElement.options).some(function(opt) {
-                return opt.value === langCode;
-              });
-              
-              if (hasLang) {
-                selectElement.value = langCode;
-                var event = document.createEvent('HTMLEvents');
-                event.initEvent('change', true, true);
-                selectElement.dispatchEvent(event);
-                clearInterval(interval);
-              }
-            }
-            
-            if (attempts >= maxAttempts) {
-              clearInterval(interval);
-            }
-          }, 300);
-        }
-        
-        setTimeout(pollAndTranslate, 500);
-      }
-      
-      document.addEventListener('DOMContentLoaded', function() {
-        document.addEventListener('submit', function(e) {
-          var form = e.target;
-          if (form && form.tagName === 'FORM') {
-            if (form.action && 
-                (form.action.includes('translate.googleusercontent.com') || 
-                 form.action.includes('translate.google.com'))) {
-              e.preventDefault();
-              e.stopPropagation();
-              form.action = 'javascript:void(0);';
-              form.target = '';
-              return false;
-            }
-          }
-        }, true);
-      });
-    </script>
-    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    body {
+      top: 0 !important;
+    }
     
-    <style>
-      .goog-te-banner-frame {
-        display: none !important;
-      }
-      body {
-        top: 0 !important;
-      }
-      .goog-te-gadget {
-        font-family: inherit !important;
-        color: transparent !important;
-      }
-      .goog-te-gadget .goog-te-combo {
-        background-color: #ffffff !important;
-        border: 1px solid #e0e0e0 !important;
-        border-radius: 8px !important;
-        padding: 8px 12px !important;
-        color: #333333 !important;
-        font-size: 13px !important;
-        font-family: 'Inter', sans-serif !important;
-        cursor: pointer !important;
-        outline: none !important;
-        min-width: 130px !important;
-        font-weight: 500 !important;
-      }
-      .goog-te-gadget .goog-te-combo:hover {
-        border-color: #e50914 !important;
-        background-color: #fafafa !important;
-      }
-      .goog-te-gadget .goog-te-combo:focus {
-        border-color: #e50914 !important;
-        box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.15) !important;
-      }
-      .goog-te-gadget > span {
-        display: none !important;
-      }
-      #google_translate_element {
-        position: fixed;
+    /* Custom Language Selector */
+    .language-selector {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 9999;
+    }
+    
+    .language-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+      border: 1px solid #404040;
+      border-radius: 12px;
+      padding: 10px 16px;
+      color: #ffffff;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .language-btn:hover {
+      background: linear-gradient(135deg, #2d2d2d 0%, #3d3d3d 100%);
+      border-color: #e50914;
+      box-shadow: 0 6px 16px rgba(229, 9, 20, 0.3);
+      transform: translateY(-2px);
+    }
+    
+    .language-icon {
+      width: 20px;
+      height: 20px;
+      fill: #e50914;
+    }
+    
+    .language-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: #1a1a1a;
+      border: 1px solid #404040;
+      border-radius: 12px;
+      padding: 8px;
+      min-width: 200px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+    }
+    
+    .language-dropdown.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    
+    .language-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      color: #ffffff;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .language-option:hover {
+      background: #2d2d2d;
+      color: #e50914;
+    }
+    
+    .language-option.active {
+      background: #e50914;
+      color: #ffffff;
+    }
+    
+    .language-flag {
+      font-size: 20px;
+    }
+    
+    @media (max-width: 640px) {
+      .language-selector {
         top: 12px;
         right: 12px;
-        z-index: 9999;
-        background: #ffffff;
-        padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
       }
-      .VIpgJd-ZVi9od-l4eHX-hSRGPd {
-        display: none !important;
+      
+      .language-btn {
+        padding: 8px 12px;
+        font-size: 13px;
       }
-      .goog-te-gadget-simple {
-        background-color: transparent !important;
-        border: none !important;
+      
+      .language-dropdown {
+        min-width: 180px;
       }
-      .notranslate {
-        transform: none !important;
+      
+      .language-option {
+        font-size: 13px;
       }
-    </style>
-  </head>
-  <body>
-    <div id="google_translate_element"></div>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+    }
+  </style>
+
+  <script type="text/javascript">
+    // Language configuration with IP-based auto-detection
+    const LANGUAGES = [
+      { code: 'en', name: 'English', flag: '🇬🇧', countries: ['US', 'GB', 'CA', 'AU', 'NZ', 'IE', 'SG'] },
+      { code: 'es', name: 'Español', flag: '🇪🇸', countries: ['ES', 'MX', 'AR', 'CO', 'CL', 'PE'] },
+      { code: 'bn', name: 'বাংলা', flag: '🇧🇩', countries: ['BD'] },
+      { code: 'hi', name: 'हिन्दी', flag: '🇮🇳', countries: ['IN'] },
+      { code: 'fr', name: 'Français', flag: '🇫🇷', countries: ['FR', 'BE', 'CH', 'CA'] },
+      { code: 'ar', name: 'العربية', flag: '🇸🇦', countries: ['SA', 'AE', 'EG', 'MA', 'DZ'] },
+      { code: 'pt', name: 'Português', flag: '🇵🇹', countries: ['PT', 'BR'] },
+      { code: 'de', name: 'Deutsch', flag: '🇩🇪', countries: ['DE', 'AT', 'CH'] },
+      { code: 'ko', name: '한국어', flag: '🇰🇷', countries: ['KR'] },
+      { code: 'it', name: 'Italiano', flag: '🇮🇹', countries: ['IT'] }
+    ];
+
+    let currentLanguage = 'en';
+    let detectedCountry = null;
+
+    // Detect user's country via IP
+    async function detectCountry() {
+      try {
+        const response = await fetch('https://ipapi.co/json/', { timeout: 3000 });
+        const data = await response.json();
+        detectedCountry = data.country_code;
+        console.log('Detected country:', detectedCountry);
+        return detectedCountry;
+      } catch (e) {
+        console.log('IP detection failed, using browser language');
+        return null;
+      }
+    }
+
+    // Auto-select language based on country
+    function autoSelectLanguage() {
+      if (!detectedCountry) return 'en';
+      
+      for (const lang of LANGUAGES) {
+        if (lang.countries.includes(detectedCountry)) {
+          console.log('Auto-selected language:', lang.name);
+          return lang.code;
+        }
+      }
+      
+      return 'en';
+    }
+
+    // Change Google Translate language
+    function changeLanguage(langCode) {
+      const selectElement = document.querySelector('.goog-te-combo');
+      if (selectElement) {
+        selectElement.value = langCode;
+        selectElement.dispatchEvent(new Event('change'));
+        currentLanguage = langCode;
+        
+        // Update UI
+        const selectedLang = LANGUAGES.find(l => l.code === langCode);
+        document.getElementById('current-lang-flag').textContent = selectedLang.flag;
+        document.getElementById('current-lang-name').textContent = selectedLang.name;
+        
+        // Update active state
+        document.querySelectorAll('.language-option').forEach(opt => {
+          opt.classList.toggle('active', opt.dataset.lang === langCode);
+        });
+        
+        // Save preference
+        localStorage.setItem('preferred-language', langCode);
+      }
+    }
+
+    // Initialize Google Translate
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: LANGUAGES.map(l => l.code).join(','),
+        autoDisplay: false,
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+      }, 'google_translate_element');
+
+      // Wait for widget to load, then auto-select language
+      let attempts = 0;
+      const checkInterval = setInterval(() => {
+        attempts++;
+        const selectElement = document.querySelector('.goog-te-combo');
+        
+        if (selectElement && selectElement.options.length > 1) {
+          clearInterval(checkInterval);
+          
+          // Check saved preference first
+          const savedLang = localStorage.getItem('preferred-language');
+          if (savedLang && savedLang !== 'en') {
+            changeLanguage(savedLang);
+          } else if (detectedCountry) {
+            const autoLang = autoSelectLanguage();
+            if (autoLang !== 'en') {
+              changeLanguage(autoLang);
+            }
+          }
+        }
+        
+        if (attempts >= 50) clearInterval(checkInterval);
+      }, 200);
+    }
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Detect country first
+      await detectCountry();
+      
+      // Setup language selector
+      const languageBtn = document.getElementById('language-btn');
+      const languageDropdown = document.getElementById('language-dropdown');
+      
+      languageBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        languageDropdown.classList.toggle('active');
+      });
+      
+      document.addEventListener('click', () => {
+        languageDropdown.classList.remove('active');
+      });
+      
+      // Setup language options
+      const dropdownContainer = document.getElementById('language-options');
+      LANGUAGES.forEach(lang => {
+        const option = document.createElement('div');
+        option.className = 'language-option';
+        option.dataset.lang = lang.code;
+        option.innerHTML = `
+          <span class="language-flag">${lang.flag}</span>
+          <span>${lang.name}</span>
+        `;
+        option.addEventListener('click', () => {
+          changeLanguage(lang.code);
+          languageDropdown.classList.remove('active');
+        });
+        dropdownContainer.appendChild(option);
+      });
+    });
+  </script>
+  
+  <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</head>
+<body>
+  <!-- Hidden Google Translate Widget -->
+  <div id="google_translate_element"></div>
+
+  <!-- Custom Language Selector -->
+  <div class="language-selector">
+    <button id="language-btn" class="language-btn">
+      <svg class="language-icon" viewBox="0 0 24 24">
+        <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+      </svg>
+      <span id="current-lang-flag">🇬🇧</span>
+      <span id="current-lang-name">English</span>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+        <path d="M6 9L1 4h10z"/>
+      </svg>
+    </button>
+    
+    <div id="language-dropdown" class="language-dropdown">
+      <div id="language-options"></div>
+    </div>
+  </div>
+
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
 </html>
