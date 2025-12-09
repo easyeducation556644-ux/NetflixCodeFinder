@@ -539,15 +539,16 @@ imap.end();
 return reject(err);
 }
 
-// Calculate 1 year ago date for IMAP search
-const oneYearAgo = new Date();
-oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+// 1 day ago (Python bot style - faster and efficient)
+const oneDayAgo = new Date();
+oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-console.log('Searching emails since:', oneYearAgo.toISOString());
+console.log('Searching emails since:', oneDayAgo.toISOString());
+console.log('User email:', userEmail);
 
-// IMAP search with date filter and Netflix sender
+// Python style: SINCE date filter + FROM netflix
 imap.search([
-['SINCE', oneYearAgo],
+['SINCE', oneDayAgo],
 ['FROM', 'netflix']
 ], (err, results) => {
 if (err) {
@@ -556,15 +557,16 @@ imap.end();
 return reject(err);
 }
 
-console.log('IMAP search results:', results ? results.length : 0);
+console.log('Total Netflix emails found:', results ? results.length : 0);
 
 if (!results || results.length === 0) {
 imap.end();
 return resolve([]);
 }
 
-// Get last 200 emails
+// Get last 200 emails (latest first)
 const latestEmails = results.slice(-200);
+console.log('Fetching latest', latestEmails.length, 'emails');
 
 const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
 const emailPromises = [];
@@ -599,58 +601,62 @@ reject(err);
 fetch.once("end", async () => {
 try {
 const emails = await Promise.all(emailPromises);
-console.log('Total emails parsed:', emails.filter(e => e !== null).length);
+const validEmails = emails.filter(e => e !== null);
+console.log('Total emails parsed:', validEmails.length);
+
+// Python style: Group by recipient
+const groupedByRecipient = {};
+for (const email of validEmails) {
+if (email.to && email.to.text) {
+const recipient = email.to.text.toLowerCase();
+if (!groupedByRecipient[recipient]) {
+groupedByRecipient[recipient] = [];
+}
+groupedByRecipient[recipient].push(email);
+}
+}
 
 const userEmailLower = userEmail.toLowerCase().trim();
-const now = new Date();
-const oneYearAgoFilter = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+const userEmails = groupedByRecipient[userEmailLower] || [];
 
-const netflixEmails = emails
-.filter((email) => email !== null)
-.filter((email) => {
-const fromAddress = (email.from?.text || "").toLowerCase();
-return fromAddress.includes("netflix");
-})
-.filter((email) => {
-const toAddresses = (email.to?.text || "").toLowerCase();
-const ccAddresses = (email.cc?.text || "").toLowerCase();
-const htmlContent = (email.html || "").toLowerCase();
+console.log('Emails for user', userEmailLower, ':', userEmails.length);
 
-const hasUserEmail = 
-toAddresses.includes(userEmailLower) ||
-ccAddresses.includes(userEmailLower) ||
-htmlContent.includes(userEmailLower);
+if (userEmails.length === 0) {
+console.log('No emails found for this user address');
+console.log('Available recipients:', Object.keys(groupedByRecipient).slice(0, 5));
+}
 
-return hasUserEmail;
-})
-.filter((email) => {
-if (!email.date) return false;
-const emailDate = new Date(email.date);
-const isInRange = emailDate >= oneYearAgoFilter && emailDate <= now;
-return isInRange;
-});
-
-console.log('Filtered Netflix emails:', netflixEmails.length);
-
-const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+// Sort by date (newest first)
+const sortedEmails = userEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
 
 imap.end();
 
 let householdEmail = null;
 
+// Python fuzzy matching approach
 for (const email of sortedEmails) {
 const subject = email.subject || "";
 const htmlContent = email.html || "";
-
-const translatedSubject = await translateToEnglish(subject);
+const textContent = email.text || "";
 
 console.log('Checking email:', {
-subject: subject,
-translated: translatedSubject,
-date: email.date
+subject: subject.substring(0, 60),
+date: email.date ? new Date(email.date).toISOString() : 'no date'
 });
 
-if (isHouseholdEmail(translatedSubject, htmlContent)) {
+// Translation (Python style)
+let translatedSubject = subject;
+try {
+translatedSubject = await translateToEnglish(subject);
+if (translatedSubject !== subject) {
+console.log('Translated:', translatedSubject.substring(0, 60));
+}
+} catch (e) {
+console.log('Translation failed, using original');
+}
+
+// Python TEMP_KEYWORDS + fuzzy matching
+if (isHouseholdEmailFuzzy(translatedSubject, subject, htmlContent, textContent)) {
 householdEmail = email;
 console.log('Found household email!');
 break;
@@ -659,6 +665,16 @@ break;
 
 if (!householdEmail) {
 console.log('No household email found');
+console.log('Checked', sortedEmails.length, 'user emails');
+
+// Debug: First 3 subjects
+if (sortedEmails.length > 0) {
+console.log('First 3 email subjects:');
+sortedEmails.slice(0, 3).forEach((e, i) => {
+console.log(`${i + 1}. ${e.subject}`);
+});
+}
+
 resolve([]);
 return;
 }
@@ -670,7 +686,7 @@ let translatedHtml = htmlContent;
 try {
 translatedHtml = await translateHtmlContentPreserveOriginal(htmlContent);
 } catch (e) {
-console.error('Translation error:', e);
+console.error('HTML translation error:', e);
 translatedHtml = htmlContent;
 }
 
@@ -683,8 +699,10 @@ to: householdEmail.to?.text || "",
 rawHtml: translatedHtml,
 };
 
+console.log('Returning email:', formattedEmail.subject);
 resolve([formattedEmail]);
 } catch (parseError) {
+console.error('Parse error:', parseError);
 imap.end();
 reject(parseError);
 }
@@ -694,11 +712,59 @@ reject(parseError);
 });
 
 imap.once("error", (err) => {
+console.error('IMAP connection error:', err);
 reject(err);
 });
 
 imap.connect();
 });
+}
+
+// Python bot fuzzy matching approach
+function isHouseholdEmailFuzzy(translatedSubject, originalSubject, htmlContent, textContent) {
+const translatedLower = (translatedSubject || "").toLowerCase();
+const originalLower = (originalSubject || "").toLowerCase();
+const htmlLower = (htmlContent || "").toLowerCase();
+const textLower = (textContent || "").toLowerCase();
+
+// Python TEMP_KEYWORDS
+const tempKeywords = [
+"temporary",
+"household",
+"temp",
+"home",
+"traveling",
+"travel",
+"access"
+];
+
+// Check keyword in translated subject
+const hasKeywordInTranslated = tempKeywords.some(kw => translatedLower.includes(kw));
+
+// Also check original subject (in case translation failed)
+const hasKeywordInOriginal = tempKeywords.some(kw => originalLower.includes(kw));
+
+// Netflix account link check
+const hasAccountLinkCheck = 
+htmlLower.includes("netflix.com/account") || 
+textLower.includes("netflix.com/account") ||
+/netflix\.com\/account/i.test(htmlContent) ||
+/netflix\.com\/account/i.test(textContent);
+
+const matched = (hasKeywordInTranslated || hasKeywordInOriginal) && hasAccountLinkCheck;
+
+if (matched) {
+console.log('Match found:', {
+hasKeywordInTranslated,
+hasKeywordInOriginal,
+hasAccountLink: hasAccountLinkCheck,
+matchedKeyword: tempKeywords.find(kw => 
+translatedLower.includes(kw) || originalLower.includes(kw)
+)
+});
+}
+
+return matched;
 }
 
 export default async function handler(req, res) {
