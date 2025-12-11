@@ -12,110 +12,97 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/hooks/use-language";
 
-// Simple localStorage cache
-const translationCache = {
-  get: (emailId, lang) => {
-    try {
-      const data = JSON.parse(localStorage.getItem(`translation-${emailId}-${lang}`));
-      return data || null;
-    } catch {
-      return null;
-    }
-  },
-  set: (emailId, lang, html) => {
-    try {
-      localStorage.setItem(`translation-${emailId}-${lang}`, JSON.stringify(html));
-    } catch {}
-  },
-};
+// Simple IndexedDB wrapper using localStorage for demo
+function cacheGet(key) {
+  try { return JSON.parse(localStorage.getItem(key)) } catch(e){ return null }
+}
+function cacheSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch(e){ }
+}
 
-// Word-by-word translation using LibreTranslate API
-async function translateWordByWord(text, targetLang) {
-  if (!text) return text;
+// Translate single text chunk using Google Translate API
+async function translateTextChunk(text, targetLang) {
+  if (!text || targetLang === 'en') return text;
   try {
-    const words = text.split(/\s+/);
-    const translatedWords = [];
-
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      const res = await fetch("https://libretranslate.de/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          q: word,
-          source: "auto",
-          target: targetLang,
-          format: "text",
-        }),
-      });
-      const json = await res.json();
-      translatedWords.push(`<mark>${json.translatedText}</mark>`); // mark current word
-      await new Promise(r => setTimeout(r, 30)); // live effect
-    }
-    return translatedWords.join(" ");
-  } catch (error) {
-    console.error("Translation error:", error);
+    const response = await fetch(
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
+    );
+    const data = await response.json();
+    if (data && data[0] && data[0][0] && data[0][0][0]) return data[0].map(item=>item[0]).join('');
+    return text;
+  } catch(e){
+    console.error("Translation error:", e);
     return text;
   }
 }
 
-function EmailContent({ email, emailId, targetLanguage }) {
+function EmailContent({ email, targetLanguage }) {
   const [translatedHtml, setTranslatedHtml] = useState(email.rawHtml);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [currentWordIndex, setCurrentWordIndex] = useState(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
-    const cached = translationCache.get(emailId, targetLanguage);
-    if (cached) {
-      setTranslatedHtml(cached);
-      return;
-    }
 
-    async function translateContent() {
+    async function translateEmail() {
+      const cacheKey = `email_${email.id}_lang_${targetLanguage}`;
+      const cached = cacheGet(cacheKey);
+      if (cached) {
+        setTranslatedHtml(cached);
+        return;
+      }
+
       setIsTranslating(true);
-      const tempDiv = document.createElement("div");
+
+      const tempDiv = document.createElement('div');
       tempDiv.innerHTML = email.rawHtml;
 
+      // Get all text nodes
       const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
       const textNodes = [];
       let node;
-      while ((node = walker.nextNode())) {
-        const text = node.textContent.trim();
-        if (text.length > 0) textNodes.push(node);
+      while (node = walker.nextNode()) {
+        if(node.textContent.trim()) textNodes.push(node);
       }
 
-      for (let i = 0; i < textNodes.length; i++) {
-        if (!isMounted) break;
-        const original = textNodes[i].textContent;
-        const translated = await translateWordByWord(original, targetLanguage);
-        textNodes[i].innerHTML = translated;
-        setTranslatedHtml(tempDiv.innerHTML);
+      // Word-by-word streaming
+      for(let n=0;n<textNodes.length;n++){
+        const words = textNodes[n].textContent.split(/(\s+)/); // keep spaces
+        let translatedWords = [];
+        for(let i=0;i<words.length;i++){
+          if(!isMounted) return;
+          setCurrentWordIndex(i);
+          const w = words[i].trim() ? await translateTextChunk(words[i], targetLanguage) : words[i];
+          translatedWords.push(w);
+          textNodes[n].textContent = translatedWords.join('');
+          setTranslatedHtml(tempDiv.innerHTML);
+        }
       }
 
-      translationCache.set(emailId, targetLanguage, tempDiv.innerHTML);
-      setIsTranslating(false);
+      if(isMounted){
+        setIsTranslating(false);
+        setCurrentWordIndex(null);
+        cacheSet(cacheKey, tempDiv.innerHTML);
+      }
     }
 
-    if (targetLanguage) {
-      translateContent();
-    }
+    translateEmail();
 
-    return () => {
-      isMounted = false;
-    };
-  }, [email.rawHtml, targetLanguage]);
+    return () => { isMounted = false; };
+  }, [email.rawHtml, email.id, targetLanguage]);
 
   return (
-    <div className="w-full relative" data-testid={`email-content-${emailId}`}>
+    <div className="w-full relative" ref={containerRef}>
       {isTranslating && (
         <div className="absolute top-2 right-2 bg-neutral-800 rounded-lg px-3 py-1.5 flex items-center gap-2 z-10">
           <Loader2 className="w-3 h-3 animate-spin text-red-500" />
           <span className="text-xs text-neutral-400">Translating...</span>
         </div>
       )}
-      <div
+      <div 
         className="email-content-wrapper rounded-xl overflow-hidden bg-white"
-        dangerouslySetInnerHTML={{ __html: translatedHtml }}
+        dangerouslySetInnerHTML={{__html: translatedHtml}}
       />
     </div>
   );
@@ -143,39 +130,39 @@ export default function Home() {
         body: JSON.stringify({ email: data.email }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Something went wrong");
+      if(!res.ok) throw new Error(json.error || "Something went wrong");
       return json;
     },
     onSuccess: (data) => {
       setResults(data);
       toast({ title: t.emailFound, description: t.foundLatestEmail });
     },
-    onError: () => setResults(null),
+    onError: (error) => setResults(null)
   });
 
-  function onSubmit(data, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
+  function onSubmit(data,e){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
     setResults(null);
     searchMutation.mutate(data);
   }
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center p-2 sm:p-4 bg-neutral-950">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8">
+      <motion.div initial={{opacity:0, y:-20}} animate={{opacity:1,y:0}} transition={{duration:0.5}} className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold text-primary tracking-wider font-display">{t.title}</h1>
           <p className="text-neutral-500 text-sm">{t.subtitle}</p>
         </div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-neutral-900 rounded-xl p-6 border border-neutral-800">
+        <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:0.2}} className="bg-neutral-900 rounded-xl p-6 border border-neutral-800">
           <div className="text-center mb-5">
             <h2 className="text-lg font-medium text-white">{t.findLatestEmail}</h2>
             <p className="text-neutral-500 text-xs mt-1">{t.enterEmailDescription}</p>
           </div>
 
           <Form {...form}>
-            <form onSubmit={e => { e.preventDefault(); e.stopPropagation(); form.handleSubmit(onSubmit)(e); }} className="space-y-4 notranslate" translate="no">
-              <FormField control={form.control} name="email" render={({ field }) => (
+            <form onSubmit={(e)=>{ e.preventDefault(); e.stopPropagation(); form.handleSubmit(onSubmit)(e) }} className="space-y-4 notranslate" translate="no">
+              <FormField control={form.control} name="email" render={({field})=>(
                 <FormItem>
                   <FormLabel className="text-white text-base font-bold">{t.enterNetflixEmail}</FormLabel>
                   <FormControl>
@@ -186,11 +173,13 @@ export default function Home() {
                   </FormControl>
                   <FormMessage className="text-red-400 text-xs" />
                 </FormItem>
-              )} />
-
+              )}/>
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 rounded-lg" disabled={searchMutation.isPending}>
-                {searchMutation.isPending ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{t.searching}</span> :
-                  <span className="flex items-center gap-2"><Search className="h-4 w-4" />{t.findCode}</span>}
+                {searchMutation.isPending ? (
+                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{t.searching}</span>
+                ):(
+                  <span className="flex items-center gap-2"><Search className="h-4 w-4" />{t.findCode}</span>
+                )}
               </Button>
             </form>
           </Form>
@@ -198,14 +187,16 @@ export default function Home() {
 
         <AnimatePresence mode="wait">
           {results?.emails?.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="w-full space-y-4">
+            <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:0.3}} className="w-full space-y-4">
               <div className="text-center"><p className="text-neutral-400 text-sm">{t.latestNetflixEmail}</p></div>
-              {results.emails.map((email, index) => (
-                <motion.div key={email.id || index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl">
+              {results.emails.map((email,index)=>(
+                <motion.div key={email.id || index} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:index*0.1}} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl">
                   <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/80">
                     <div className="flex items-center justify-between gap-2 sm:gap-3">
                       <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0"><span className="text-white text-lg sm:text-xl font-bold">N</span></div>
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-white text-lg sm:text-xl font-bold">N</span>
+                        </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-white text-sm sm:text-base">Netflix</span>
@@ -213,11 +204,11 @@ export default function Home() {
                           <p className="text-neutral-400 text-xs sm:text-sm line-clamp-2">{email.subject}</p>
                         </div>
                       </div>
-                      <span className="text-neutral-500 text-xs flex-shrink-0">{new Date(email.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-neutral-500 text-xs flex-shrink-0">{new Date(email.receivedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
                     </div>
                   </div>
                   <div className="p-2 sm:p-4">
-                    <EmailContent email={email} emailId={email.id || index} targetLanguage={language} />
+                    <EmailContent email={email} targetLanguage={language} />
                   </div>
                 </motion.div>
               ))}
@@ -225,11 +216,13 @@ export default function Home() {
           )}
 
           {searchMutation.isError && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="bg-neutral-900 rounded-xl p-4 border border-red-900/50 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0"><AlertCircle className="w-4 h-4 text-red-400" /></div>
+            <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} className="bg-neutral-900 rounded-xl p-4 border border-red-900/50 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+              </div>
               <div>
                 <h3 className="text-red-400 font-medium text-sm">{t.searchFailed}</h3>
-                <p className="text-neutral-500 text-xs mt-0.5">{searchMutation.error.message}</p>
+                <p className="text-neutral-500 text-xs mt-0.5">{searchMutation.error?.message}</p>
               </div>
             </motion.div>
           )}
