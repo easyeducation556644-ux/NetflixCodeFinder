@@ -82,6 +82,12 @@ function hasRequiredNetflixLinks(htmlContent, textContent) {
   // চেক করুন দ্বিতীয় লিংক আছে কিনা (update-primary-location link)
   const hasUpdateLocationLink = /https:\/\/www\.netflix\.com\/account\/update-primary-location\?nftoken=/i.test(content);
   
+  console.log('🔍 Link Check:', {
+    hasVerifyLink,
+    hasUpdateLocationLink,
+    bothLinksFound: hasVerifyLink && hasUpdateLocationLink
+  });
+  
   return hasVerifyLink && hasUpdateLocationLink;
 }
 
@@ -469,12 +475,19 @@ function searchNetflixEmails(imapConfig, userEmail) {
             try {
               const emails = await Promise.all(emailPromises);
 
+              console.log('📧 Total emails fetched:', emails.length);
+
               const userEmailLower = userEmail.toLowerCase().trim();
 
               // Calculate the time 15 minutes ago
               const now = new Date();
               const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
               
+              console.log('⏰ Time filter:', {
+                now: now.toISOString(),
+                fifteenMinutesAgo: fifteenMinutesAgo.toISOString()
+              });
+
               const netflixEmails = emails
                 .filter((email) => email !== null)
                 .filter((email) => {
@@ -501,7 +514,15 @@ function searchNetflixEmails(imapConfig, userEmail) {
                   return emailDate >= fifteenMinutesAgo;
                 });
 
+              console.log('📨 Netflix emails from user (last 15 min):', netflixEmails.length);
+
               const sortedEmails = netflixEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+              console.log('📋 Sorted emails:', sortedEmails.map(e => ({
+                subject: e.subject,
+                date: e.date,
+                from: e.from?.text
+              })));
 
               imap.end();
 
@@ -512,18 +533,36 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 const htmlContent = email.html || "";
                 const textContent = email.text || "";
 
+                console.log('🔎 Checking email:', {
+                  subject: email.subject,
+                  hasHtml: !!htmlContent,
+                  hasText: !!textContent,
+                  htmlLength: htmlContent.length,
+                  textLength: textContent.length
+                });
+
                 if (isHouseholdEmail(htmlContent, textContent)) {
                   householdEmail = email;
+                  console.log('✅ Found household email!');
                   break;
+                } else {
+                  console.log('❌ Not a household email');
                 }
               }
 
               if (!householdEmail) {
+                console.log('⚠️ No household email found after checking all emails');
                 resolve([]);
                 return;
               }
 
               const htmlContent = householdEmail.html || "";
+
+              console.log('✅ Returning email:', {
+                subject: householdEmail.subject,
+                from: householdEmail.from?.text,
+                date: householdEmail.date
+              });
 
               const formattedEmail = {
                 id: householdEmail.messageId || `${Date.now()}-${Math.random()}`,
@@ -536,6 +575,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
               resolve([formattedEmail]);
             } catch (parseError) {
+              console.error('❌ Parse error:', parseError);
               imap.end();
               reject(parseError);
             }
@@ -559,6 +599,8 @@ export default async function handler(req, res) {
 
   const { email } = req.body;
 
+  console.log('🚀 API called with email:', email);
+
   if (!email) {
     return res.status(400).json({ error: "Please enter an email address to search." });
   }
@@ -572,6 +614,13 @@ export default async function handler(req, res) {
     tlsOptions: { rejectUnauthorized: false },
   };
 
+  console.log('📧 IMAP Config:', {
+    user: imapConfig.user,
+    host: imapConfig.host,
+    port: imapConfig.port,
+    hasPassword: !!imapConfig.password
+  });
+
   if (!imapConfig.user || !imapConfig.password) {
     return res.status(500).json({ 
       error: "Email service is not configured. Please contact the administrator." 
@@ -579,17 +628,22 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('🔍 Starting email search...');
     const results = await searchNetflixEmails(imapConfig, email);
+    console.log('✅ Search completed. Results:', results.length);
+    
     if (results && results.length > 0) {
       res.status(200).json({ emails: results, totalCount: results.length });
     } else {
+      console.log('❌ No emails found');
       res.status(404).json({ 
         error: "No Netflix email found for this address." 
       });
     }
   } catch (error) {
+    console.error('❌ Error in handler:', error);
     res.status(500).json({ 
       error: getUserFriendlyError(error)
     });
   }
-}
+             }
