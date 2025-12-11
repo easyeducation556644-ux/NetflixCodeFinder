@@ -36,51 +36,59 @@ async function translateText(text, targetLang) {
   }
 }
 
-// Email content with progressive word-by-word translation
+// Parse HTML and return text nodes
+function parseHTMLToLines(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+  const lines = [];
+  while (walker.nextNode()) {
+    const text = walker.currentNode.nodeValue.trim();
+    if (text) lines.push(text);
+  }
+  return lines;
+}
+
+// Email content component
 function EmailContent({ email, emailId, targetLanguage }) {
-  const [translatedHtml, setTranslatedHtml] = useState(email.rawHtml);
+  const [rawLines] = useState(parseHTMLToLines(email.rawHtml));
+  const [translatedLines, setTranslatedLines] = useState([...rawLines]);
+  const [currentLine, setCurrentLine] = useState(-1);
+  const [currentWord, setCurrentWord] = useState(-1);
   const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    async function translateHTML() {
+    async function translateWordByWord() {
       setIsTranslating(true);
+      const newTranslated = [...rawLines];
 
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(email.rawHtml, "text/html");
+      for (let i = 0; i < rawLines.length; i++) {
+        if (!mounted) break;
+        setCurrentLine(i);
+        const words = rawLines[i].split(/\s+/);
+        const translatedWords = [];
 
-      async function translateNode(node) {
-        if (!isMounted) return;
-
-        if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
-          const words = node.nodeValue.split(/\s+/);
-          let translatedWords = [];
-
-          for (let i = 0; i < words.length; i++) {
-            if (!isMounted) break;
-            const translatedWord = await translateText(words[i], targetLanguage);
-            translatedWords.push(translatedWord);
-            node.nodeValue = translatedWords.join(" ");
-            setTranslatedHtml(doc.body.innerHTML);
-            await new Promise(res => setTimeout(res, 50)); // small delay for streaming effect
-          }
-        } else {
-          for (let child of node.childNodes) {
-            await translateNode(child);
-          }
+        for (let j = 0; j < words.length; j++) {
+          if (!mounted) break;
+          setCurrentWord(j);
+          const tWord = await translateText(words[j], targetLanguage);
+          translatedWords[j] = tWord;
+          newTranslated[i] = translatedWords.join(" ");
+          setTranslatedLines([...newTranslated]);
+          await new Promise(r => setTimeout(r, 50));
         }
+        setCurrentWord(-1);
       }
-
-      await translateNode(doc.body);
-
-      if (isMounted) setIsTranslating(false);
+      setCurrentLine(-1);
+      setIsTranslating(false);
     }
 
-    translateHTML();
+    translateWordByWord();
 
-    return () => { isMounted = false; };
-  }, [email.rawHtml, targetLanguage]);
+    return () => { mounted = false; };
+  }, [rawLines, targetLanguage]);
 
   return (
     <div className="w-full relative" data-testid={`email-content-${emailId}`}>
@@ -90,10 +98,23 @@ function EmailContent({ email, emailId, targetLanguage }) {
           <span className="text-xs text-neutral-400">Translating...</span>
         </div>
       )}
-      <div
-        className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2"
-        dangerouslySetInnerHTML={{ __html: translatedHtml }}
-      />
+      <div className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2">
+        {translatedLines.map((line, lIdx) => {
+          if (lIdx === currentLine) {
+            const words = line.split(/\s+/);
+            return (
+              <div key={lIdx} className="whitespace-pre-wrap">
+                {words.map((word, wIdx) => (
+                  <span key={wIdx}>
+                    {wIdx === currentWord ? <mark>{word}</mark> : word}{" "}
+                  </span>
+                ))}
+              </div>
+            );
+          }
+          return <div key={lIdx} className="whitespace-pre-wrap">{line || "\u00A0"}</div>;
+        })}
+      </div>
     </div>
   );
 }
@@ -104,14 +125,8 @@ export default function Home() {
   const { t, language } = useLanguage();
   const [results, setResults] = useState(null);
 
-  const formSchema = useMemo(() => z.object({
-    email: z.string().email({ message: t.validEmailError }),
-  }), [t]);
-
-  const form = useForm({
-    resolver: zodResolver(formSchema),
-    defaultValues: { email: "" },
-  });
+  const formSchema = useMemo(() => z.object({ email: z.string().email({ message: t.validEmailError }) }), [t]);
+  const form = useForm({ resolver: zodResolver(formSchema), defaultValues: { email: "" } });
 
   const searchMutation = useMutation({
     mutationFn: async (data) => {
@@ -124,75 +139,42 @@ export default function Home() {
       if (!res.ok) throw new Error(json.error || "Something went wrong");
       return json;
     },
-    onSuccess: (data) => {
-      setResults(data);
-      toast({ title: t.emailFound, description: t.foundLatestEmail });
-    },
+    onSuccess: (data) => { setResults(data); toast({ title: t.emailFound, description: t.foundLatestEmail }); },
     onError: () => setResults(null),
   });
 
-  function onSubmit(data, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    setResults(null);
-    searchMutation.mutate(data);
-  }
+  function onSubmit(data, e) { if (e) { e.preventDefault(); e.stopPropagation(); } setResults(null); searchMutation.mutate(data); }
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center p-2 sm:p-4 bg-neutral-950">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8"
-      >
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold text-primary tracking-wider font-display">{t.title}</h1>
           <p className="text-neutral-500 text-sm">{t.subtitle}</p>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-neutral-900 rounded-xl p-6 border border-neutral-800"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-neutral-900 rounded-xl p-6 border border-neutral-800">
           <div className="text-center mb-5">
             <h2 className="text-lg font-medium text-white">{t.findLatestEmail}</h2>
             <p className="text-neutral-500 text-xs mt-1">{t.enterEmailDescription}</p>
           </div>
 
           <Form {...form}>
-            <form
-              onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); form.handleSubmit(onSubmit)(e); }}
-              className="space-y-4 notranslate" translate="no"
-            >
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-base font-bold">{t.enterNetflixEmail}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
-                        <Input 
-                          placeholder={t.emailPlaceholder} 
-                          className="pl-10 h-10 bg-neutral-800 border-neutral-700 rounded-lg text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary"
-                          {...field} 
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage className="text-red-400 text-xs" />
-                  </FormItem>
-                )}
-              />
-              
+            <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); form.handleSubmit(onSubmit)(e); }} className="space-y-4 notranslate" translate="no">
+              <FormField control={form.control} name="email" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-white text-base font-bold">{t.enterNetflixEmail}</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+                      <Input placeholder={t.emailPlaceholder} className="pl-10 h-10 bg-neutral-800 border-neutral-700 rounded-lg text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary" {...field} />
+                    </div>
+                  </FormControl>
+                  <FormMessage className="text-red-400 text-xs" />
+                </FormItem>
+              )}/>
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 rounded-lg" disabled={searchMutation.isPending}>
-                {searchMutation.isPending ? (
-                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{t.searching}</span>
-                ) : (
-                  <span className="flex items-center gap-2"><Search className="h-4 w-4" />{t.findCode}</span>
-                )}
+                {searchMutation.isPending ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{t.searching}</span> : <span className="flex items-center gap-2"><Search className="h-4 w-4" />{t.findCode}</span>}
               </Button>
             </form>
           </Form>
@@ -201,11 +183,9 @@ export default function Home() {
         <AnimatePresence mode="wait">
           {results?.emails?.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="w-full space-y-4">
-              <div className="text-center">
-                <p className="text-neutral-400 text-sm">{t.latestNetflixEmail}</p>
-              </div>
-              {results.emails.map((email, index) => (
-                <motion.div key={email.id || index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl">
+              <div className="text-center"><p className="text-neutral-400 text-sm">{t.latestNetflixEmail}</p></div>
+              {results.emails.map((email, idx) => (
+                <motion.div key={email.id || idx} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl">
                   <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/80 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-full flex items-center justify-center">
@@ -219,7 +199,7 @@ export default function Home() {
                     <span className="text-neutral-500 text-xs">{new Date(email.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                   <div className="p-2 sm:p-4">
-                    <EmailContent email={email} emailId={email.id || index} targetLanguage={language} />
+                    <EmailContent email={email} emailId={email.id || idx} targetLanguage={language} />
                   </div>
                 </motion.div>
               ))}
@@ -228,9 +208,7 @@ export default function Home() {
 
           {searchMutation.isError && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="bg-neutral-900 rounded-xl p-4 border border-red-900/50 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-                <AlertCircle className="w-4 h-4 text-red-400" />
-              </div>
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-400" /></div>
               <div>
                 <h3 className="text-red-400 font-medium text-sm">{t.searchFailed}</h3>
                 <p className="text-neutral-500 text-xs mt-0.5">{searchMutation.error?.message}</p>
@@ -238,7 +216,6 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
-
         <p className="text-center text-xs text-neutral-600">{t.showsLatestOnly}</p>
       </motion.div>
     </div>
