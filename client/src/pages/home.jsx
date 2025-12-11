@@ -15,18 +15,15 @@ import { useLanguage } from "@/hooks/use-language";
 // Translation cache
 const translationCache = new Map();
 
-// Google Translate helper (Translation cache, language select support)
+// Google Translate helper
 async function translateText(text, targetLang) {
-  if (!text) return "";
-  const lang = targetLang || "en";
-  const cacheKey = `${text}-${lang}`;
+  if (!text || targetLang === "en") return text;
+  const cacheKey = `${text}-${targetLang}`;
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
 
   try {
     const res = await fetch(
-      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(
-        text
-      )}`
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
     );
     const data = await res.json();
     const translated = data[0].map(item => item[0]).join("");
@@ -38,143 +35,50 @@ async function translateText(text, targetLang) {
   }
 }
 
-// *** নতুন/সংশোধিত: HTML পার্সিং ফাংশন (ডিজাইন ব্রেক সমাধান) ***
-function parseHTMLToLines(html) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const lines = [];
-
-  function isVisibleText(node) {
-    if (node.parentNode) {
-      const parentName = node.parentNode.nodeName.toLowerCase();
-      // Exclude text within style, script, head, or title tags
-      if (parentName === 'style' || parentName === 'script' || parentName === 'head' || parentName === 'title') {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  function collectText(element) {
-    for (let i = 0; i < element.childNodes.length; i++) {
-      const node = element.childNodes[i];
-      // ব্লক এলিমেন্ট চিহ্নিত করা, যা স্ট্রাকচার বোঝাতে সাহায্য করে
-      const isBlock = node.nodeType === Node.ELEMENT_NODE && ['p', 'div', 'h1', 'h2', 'br', 'li'].includes(node.tagName.toLowerCase());
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.nodeValue; 
-        if (isVisibleText(node)) {
-          // নিউলাইন দ্বারা বিভক্ত করা এবং ফাঁকা লাইন \u00A0 দিয়ে সংরক্ষণ করা
-          text.split('\n').forEach(line => {
-             const trimmedLine = line.trim();
-             lines.push(trimmedLine || "\u00A0"); 
-          });
-        }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const tagName = node.tagName.toLowerCase();
-        if (tagName !== 'style' && tagName !== 'script' && tagName !== 'head') {
-          
-          // ব্লক এলিমেন্টের আগে একটি ফাঁকা লাইন যোগ করা
-          if (isBlock && lines.length > 0 && lines[lines.length - 1] !== "\u00A0") {
-             lines.push("\u00A0");
-          }
-          
-          collectText(node);
-          
-          // ব্লক এলিমেন্টের পরে একটি ফাঁকা লাইন যোগ করা
-          if (isBlock && lines[lines.length - 1] !== "\u00A0") {
-             lines.push("\u00A0");
-          }
-        }
-      }
-    }
-  }
-
-  if (doc.body) {
-    collectText(doc.body);
-  }
-
-  // শেষের অতিরিক্ত ফাঁকা লাইনগুলি মুছে ফেলা
-  while(lines.length > 0 && lines[lines.length - 1] === "\u00A0") {
-      lines.pop();
-  }
-  
-  return lines;
-}
-
-
-// Email content component (Word-by-word streaming, Raw display first)
+// Word-by-word HTML translation preserving design
 function EmailContent({ email, emailId, targetLanguage }) {
-  // নতুন: rawLines State যোগ করা হলো
-  const [rawLines, setRawLines] = useState(() => parseHTMLToLines(email.rawHtml));
-  const [translatedLines, setTranslatedLines] = useState(() => [...rawLines]);
-  const [currentLine, setCurrentLine] = useState(-1);
-  const [currentWord, setCurrentWord] = useState(-1); // নতুন: Word-by-word এর জন্য
+  const [translatedHtml, setTranslatedHtml] = useState(email.rawHtml);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [isRawShown, setIsRawShown] = useState(true); // Raw email আগে দেখানোর জন্য
-
-  // যখন emailId বা rawHtml পরিবর্তন হয় তখন লাইনগুলি রিসেট করা
-  useEffect(() => {
-    const newRawLines = parseHTMLToLines(email.rawHtml);
-    setRawLines(newRawLines);
-    setTranslatedLines(newRawLines); // প্রথমে Raw লাইনগুলি দেখানো
-    setIsRawShown(true); 
-  }, [email.rawHtml, emailId]);
-
 
   useEffect(() => {
-    // শুধুমাত্র যখন targetLanguage পরিবর্তন হয় তখনই অনুবাদ শুরু হবে
-    if (targetLanguage && targetLanguage !== "auto" && !isTranslating) { 
-      let mounted = true;
+    let isMounted = true;
 
-      async function translateWordByWord() {
-        setIsTranslating(true);
-        setIsRawShown(false); // অনুবাদ শুরু হলে Raw দৃশ্য লুকানো
-        
-        const newTranslated = [...rawLines];
+    async function translateHTMLWordByWord(html) {
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = html;
 
-        for (let i = 0; i < rawLines.length; i++) {
-          if (!mounted) break;
-          setCurrentLine(i);
-          const words = rawLines[i].split(/\s+/).filter(word => word.length > 0); // শব্দে ভাগ করা
-          const translatedWords = [];
-
-          for (let j = 0; j < words.length; j++) {
-            if (!mounted) break;
-            setCurrentWord(j); // বর্তমান শব্দটি হাইলাইট করার জন্য
-            
-            const tWord = await translateText(words[j], targetLanguage);
-            translatedWords[j] = tWord;
-            
-            // অনুবাদ স্ট্রিমিং এর জন্য স্টেট আপডেট করা
-            newTranslated[i] = translatedWords.join(" ");
-            setTranslatedLines([...newTranslated]);
-            await new Promise(r => setTimeout(r, 50)); // Word streaming delay (50ms)
-          }
-          setCurrentWord(-1); // শব্দ হাইলাইট বন্ধ করা
-        }
-        setCurrentLine(-1); // লাইন হাইলাইট বন্ধ করা
-        setIsTranslating(false);
+      const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+      const nodes = [];
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.textContent.trim()) nodes.push(node);
       }
-      
-      // Raw ইমেইল প্রথমে দেখাতে কিছুটা বিলম্ব (500ms)
-      const timer = setTimeout(() => {
-        translateWordByWord();
-      }, 500); 
 
-      return () => { 
-        mounted = false; 
-        clearTimeout(timer);
-      };
+      setIsTranslating(true);
+      for (let i = 0; i < nodes.length; i++) {
+        if (!isMounted) break;
+        const words = nodes[i].textContent.split(/\s+/);
+        let translatedWords = [];
+        for (let j = 0; j < words.length; j++) {
+          if (!isMounted) break;
+          const tWord = await translateText(words[j], targetLanguage);
+          translatedWords[j] = tWord;
+          nodes[i].textContent = translatedWords.join(" ");
+          setTranslatedHtml(tempDiv.innerHTML);
+          await new Promise(r => setTimeout(r, 30)); // streaming effect
+        }
+      }
+      setIsTranslating(false);
     }
-    
-    // Cleanup if translation is running but no longer needed
-    return () => {};
-    
-  }, [rawLines, targetLanguage]);
 
-  // কোন লাইনগুলি প্রদর্শন করা হবে তা নির্ধারণ করা
-  const displayLines = isRawShown ? rawLines : translatedLines;
+    if (targetLanguage && targetLanguage !== "en") {
+      translateHTMLWordByWord(email.rawHtml);
+    } else {
+      setTranslatedHtml(email.rawHtml);
+    }
+
+    return () => { isMounted = false; };
+  }, [email.rawHtml, targetLanguage]);
 
   return (
     <div className="w-full relative" data-testid={`email-content-${emailId}`}>
@@ -184,28 +88,10 @@ function EmailContent({ email, emailId, targetLanguage }) {
           <span className="text-xs text-neutral-400">Translating...</span>
         </div>
       )}
-      <div className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2">
-        {displayLines.map((line, lIdx) => {
-          if (!isRawShown && lIdx === currentLine) { // অনুবাদের সময় বর্তমান লাইনটি হাইলাইট করা
-            const words = line.split(/\s+/).filter(word => word.length > 0);
-            return (
-              <div key={lIdx} className="whitespace-pre-wrap">
-                {words.map((word, wIdx) => (
-                  <span key={wIdx}>
-                    {wIdx === currentWord ? <mark>{word}</mark> : word}{" "}
-                  </span>
-                ))}
-              </div>
-            );
-          }
-          // স্বাভাবিক লাইন প্রদর্শন: HTML পার্সিং-এর কারণে স্ট্রাকচার ঠিক থাকবে
-          return <div key={lIdx} className="whitespace-pre-wrap">{line || "\u00A0"}</div>;
-        })}
-      </div>
-      {/* Indicator */}
-      <div className="text-right text-xs text-neutral-500 mt-2">
-         {isRawShown ? "Raw Content" : `Translated to: ${targetLanguage.toUpperCase()}`}
-      </div>
+      <div
+        className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2 sm:p-4"
+        dangerouslySetInnerHTML={{ __html: translatedHtml }}
+      />
     </div>
   );
 }
@@ -222,7 +108,9 @@ export default function Home() {
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: { email: "" },
+    defaultValues: {
+      email: "",
+    },
   });
 
   const searchMutation = useMutation({
@@ -238,9 +126,14 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setResults(data);
-      toast({ title: t.emailFound, description: t.foundLatestEmail });
+      toast({
+        title: t.emailFound,
+        description: t.foundLatestEmail,
+      });
     },
-    onError: () => setResults(null),
+    onError: (error) => {
+      setResults(null);
+    },
   });
 
   function onSubmit(data, event) {
@@ -257,11 +150,13 @@ export default function Home() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8"
       >
+        {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold text-primary tracking-wider font-display">{t.title}</h1>
           <p className="text-neutral-500 text-sm">{t.subtitle}</p>
         </div>
 
+        {/* Email search form */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -274,10 +169,7 @@ export default function Home() {
           </div>
 
           <Form {...form}>
-            <form
-              onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); form.handleSubmit(onSubmit)(e); }}
-              className="space-y-4 notranslate" translate="no"
-            >
+            <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); form.handleSubmit(onSubmit)(e); }} className="space-y-4 notranslate" translate="no">
               <FormField
                 control={form.control}
                 name="email"
@@ -289,7 +181,7 @@ export default function Home() {
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
                         <Input 
                           placeholder={t.emailPlaceholder} 
-                          className="pl-10 h-10 bg-neutral-800 border-neutral-700 rounded-lg text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary"
+                          className="pl-10 h-10 bg-neutral-800 border-neutral-700 rounded-lg text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary" 
                           {...field} 
                         />
                       </div>
@@ -299,23 +191,35 @@ export default function Home() {
                 )}
               />
               
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 rounded-lg" disabled={searchMutation.isPending}>
+              <Button 
+                type="submit" 
+                className="w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 rounded-lg"
+                disabled={searchMutation.isPending}
+              >
                 {searchMutation.isPending ? (
-                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{t.searching}</span>
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t.searching}
+                  </span>
                 ) : (
-                  <span className="flex items-center gap-2"><Search className="h-4 w-4" />{t.findCode}</span>
+                  <span className="flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    {t.findCode}
+                  </span>
                 )}
               </Button>
             </form>
           </Form>
         </motion.div>
 
+        {/* Email results */}
         <AnimatePresence mode="wait">
           {results?.emails?.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="w-full space-y-4">
               <div className="text-center">
                 <p className="text-neutral-400 text-sm">{t.latestNetflixEmail}</p>
               </div>
+
               {results.emails.map((email, index) => (
                 <motion.div key={email.id || index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl">
                   <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/80 flex justify-between items-center">
@@ -330,6 +234,7 @@ export default function Home() {
                     </div>
                     <span className="text-neutral-500 text-xs">{new Date(email.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
+
                   <div className="p-2 sm:p-4">
                     <EmailContent email={email} emailId={email.id || index} targetLanguage={language} />
                   </div>
