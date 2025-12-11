@@ -198,7 +198,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 const now = new Date();
                 
                 // এখানে মিনিটের সংখ্যা পরিবর্তন করুন (যেমন: 5 বা 30)
-                const minutesToFilter = 1555555555; 
+                const minutesToFilter = 1555; 
                 const fifteenMinutesAgo = new Date(now.getTime() - minutesToFilter * 60 * 1000);
                 
                 // IMAP সার্চ: নির্দিষ্ট সময়সীমার মধ্যে Netflix ইমেইলগুলি খুঁজুন
