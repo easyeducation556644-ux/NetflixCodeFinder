@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mail, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { Search, Mail, AlertCircle, Loader2, ExternalLink, Languages } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,96 +12,131 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/hooks/use-language";
 
-function ContentSegments({ segments, emailId }) {
-  if (!segments || segments.length === 0) {
-    return (
-      <div className="text-neutral-500 text-sm text-center py-2">
-        No content available
-      </div>
+// Translation helper using Google Translate API (free tier)
+async function translateText(text, targetLang) {
+  if (!text || targetLang === 'en') return text;
+  
+  try {
+    const response = await fetch(
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
     );
+    const data = await response.json();
+    
+    if (data && data[0] && data[0][0] && data[0][0][0]) {
+      return data[0].map(item => item[0]).join('');
+    }
+    return text;
+  } catch (error) {
+    console.error('Translation error:', error);
+    return text;
   }
-
-  return (
-    <div 
-      className="space-y-2"
-      data-testid={`content-${emailId}`}
-    >
-      {segments.map((segment, index) => {
-        if (segment.type === "text") {
-          return (
-            <div key={index} className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap">
-              {segment.value}
-            </div>
-          );
-        }
-        
-        if (segment.type === "buttons" && segment.buttons) {
-          const validButtons = segment.buttons.filter(btn => 
-            btn.category !== "resetPassword" && 
-            btn.category !== "manageDevices" && 
-            btn.category !== "getCode"
-          );
-          
-          if (validButtons.length === 0) return null;
-          
-          return (
-            <div key={index} className="py-2 flex flex-wrap gap-2">
-              {validButtons.map((btn, btnIndex) => (
-                <a
-                  key={btnIndex}
-                  href={btn.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold text-base rounded-full shadow-lg shadow-red-900/30 hover:shadow-red-800/40 transition-all duration-200 hover:scale-105"
-                  data-testid={`button-${btn.category || 'action'}-${emailId}-${btnIndex}`}
-                >
-                  <span>{btn.label}</span>
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              ))}
-            </div>
-          );
-        }
-        
-        if (segment.type === "link" && segment.isMain) {
-          const skipCategories = ["resetPassword", "manageDevices", "getCode"];
-          if (skipCategories.includes(segment.category)) {
-            return null;
-          }
-          
-          return (
-            <div key={index} className="py-3">
-              <a
-                href={segment.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold text-base rounded-full shadow-lg shadow-red-900/30 hover:shadow-red-800/40 transition-all duration-200 hover:scale-105"
-                data-testid={`button-main-link-${emailId}-${index}`}
-              >
-                <span>{segment.label}</span>
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            </div>
-          );
-        }
-        
-        return null;
-      })}
-    </div>
-  );
 }
 
-function EmailContent({ email, emailId }) {
-  const { rawHtml, contentSegments } = email;
+// Extract text content from HTML
+function extractTextFromHTML(html) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
   
+  // Remove script and style tags
+  const scripts = tempDiv.querySelectorAll('script, style');
+  scripts.forEach(el => el.remove());
+  
+  return tempDiv.textContent || tempDiv.innerText || '';
+}
+
+// Translate HTML content while preserving structure
+async function translateHTML(html, targetLang) {
+  if (!html || targetLang === 'en') return html;
+  
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  // Find all text nodes and translate them
+  const walker = document.createTreeWalker(
+    tempDiv,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+  
+  const textNodes = [];
+  let node;
+  
+  while (node = walker.nextNode()) {
+    const text = node.textContent.trim();
+    if (text && text.length > 0) {
+      textNodes.push(node);
+    }
+  }
+  
+  // Translate all text nodes in batches
+  const batchSize = 10;
+  for (let i = 0; i < textNodes.length; i += batchSize) {
+    const batch = textNodes.slice(i, i + batchSize);
+    const translations = await Promise.all(
+      batch.map(node => translateText(node.textContent, targetLang))
+    );
+    
+    batch.forEach((node, index) => {
+      node.textContent = translations[index];
+    });
+  }
+  
+  return tempDiv.innerHTML;
+}
+
+function EmailContent({ email, emailId, targetLanguage }) {
+  const [translatedHtml, setTranslatedHtml] = useState(email.rawHtml);
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function translateContent() {
+      if (targetLanguage === 'en') {
+        setTranslatedHtml(email.rawHtml);
+        return;
+      }
+
+      setIsTranslating(true);
+      try {
+        const translated = await translateHTML(email.rawHtml, targetLanguage);
+        if (isMounted) {
+          setTranslatedHtml(translated);
+        }
+      } catch (error) {
+        console.error('Translation failed:', error);
+        if (isMounted) {
+          setTranslatedHtml(email.rawHtml);
+        }
+      } finally {
+        if (isMounted) {
+          setIsTranslating(false);
+        }
+      }
+    }
+
+    translateContent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [email.rawHtml, targetLanguage]);
+
   return (
     <div 
-      className="w-full"
+      className="w-full relative"
       data-testid={`email-content-${emailId}`}
     >
+      {isTranslating && (
+        <div className="absolute top-2 right-2 bg-neutral-800 rounded-lg px-3 py-1.5 flex items-center gap-2 z-10">
+          <Loader2 className="w-3 h-3 animate-spin text-red-500" />
+          <span className="text-xs text-neutral-400">Translating...</span>
+        </div>
+      )}
       <div 
         className="email-content-wrapper rounded-xl overflow-hidden bg-white"
-        dangerouslySetInnerHTML={{ __html: rawHtml || "" }}
+        dangerouslySetInnerHTML={{ __html: translatedHtml || "" }}
       />
     </div>
   );
@@ -109,7 +144,7 @@ function EmailContent({ email, emailId }) {
 
 export default function Home() {
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [results, setResults] = useState(null);
 
   const formSchema = useMemo(() => z.object({
@@ -302,6 +337,7 @@ export default function Home() {
                     <EmailContent 
                       email={email}
                       emailId={email.id || index}
+                      targetLanguage={language}
                     />
                   </div>
                 </motion.div>
@@ -335,4 +371,4 @@ export default function Home() {
       </motion.div>
     </div>
   );
-}
+                  }
