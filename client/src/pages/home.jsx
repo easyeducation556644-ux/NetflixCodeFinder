@@ -36,7 +36,7 @@ async function translateText(text, targetLang) {
   }
 }
 
-// Extract text nodes with their parent elements for reconstruction
+// Extract text nodes with their parent elements
 function extractTextNodes(element) {
   const textNodes = [];
   const walker = document.createTreeWalker(
@@ -44,7 +44,6 @@ function extractTextNodes(element) {
     NodeFilter.SHOW_TEXT,
     {
       acceptNode: (node) => {
-        // Skip script, style, and empty text nodes
         const parent = node.parentElement;
         if (!parent) return NodeFilter.FILTER_REJECT;
         const tagName = parent.tagName.toLowerCase();
@@ -62,7 +61,7 @@ function extractTextNodes(element) {
   while ((node = walker.nextNode())) {
     textNodes.push({
       node: node,
-      originalText: node.nodeValue,
+      originalText: node.nodeValue.trim(),
       parent: node.parentElement
     });
   }
@@ -70,131 +69,113 @@ function extractTextNodes(element) {
   return textNodes;
 }
 
-// Email content component
+// Email content component with line-by-line translation
 function EmailContent({ email, emailId, targetLanguage }) {
   const containerRef = useRef(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState(0);
-  const [textNodes, setTextNodes] = useState([]);
+  const [currentLineIndex, setCurrentLineIndex] = useState(-1);
 
   // Initialize: Parse HTML and show original
   useEffect(() => {
     if (!containerRef.current || !email.rawHtml) return;
-    
-    // Create a temporary container to parse HTML
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = email.rawHtml;
-    
-    // Extract text nodes
-    const nodes = extractTextNodes(tempDiv);
-    setTextNodes(nodes);
-    
-    // Set the original HTML
     containerRef.current.innerHTML = email.rawHtml;
   }, [email.rawHtml]);
 
   // Start translation after showing original
   useEffect(() => {
-    if (!containerRef.current || textNodes.length === 0 || targetLanguage === 'en') return;
+    if (!containerRef.current || !email.rawHtml || targetLanguage === 'en') return;
 
     let mounted = true;
 
-    async function translateWordByWord() {
+    async function translateLineByLine() {
       setIsTranslating(true);
       
-      // Re-extract text nodes from the actual DOM
+      // Extract text nodes from the actual DOM
       const liveNodes = extractTextNodes(containerRef.current);
       
-      let processedWords = 0;
-      let totalWords = 0;
-      
-      // Calculate total words
-      liveNodes.forEach(nodeInfo => {
-        const words = nodeInfo.originalText.trim().split(/\s+/).filter(w => w.length > 0);
-        totalWords += words.length;
-      });
+      if (liveNodes.length === 0) {
+        setIsTranslating(false);
+        return;
+      }
 
       for (let i = 0; i < liveNodes.length; i++) {
         if (!mounted) break;
         
+        setCurrentLineIndex(i);
+        setTranslationProgress(Math.round(((i + 1) / liveNodes.length) * 100));
+        
         const nodeInfo = liveNodes[i];
-        const originalText = nodeInfo.originalText.trim();
-        const words = originalText.split(/\s+/).filter(w => w.length > 0);
+        const originalText = nodeInfo.originalText;
         
-        if (words.length === 0) continue;
-
-        const translatedWords = [];
-
-        for (let j = 0; j < words.length; j++) {
-          if (!mounted) break;
-          
-          // Translate word
-          const translatedWord = await translateText(words[j], targetLanguage);
-          translatedWords.push(translatedWord);
-          
-          // Create highlighted version
-          const displayWords = translatedWords.map((w, idx) => {
-            if (idx === j) {
-              return `<mark style="background-color: #fef08a; padding: 2px 4px; border-radius: 3px;">${w}</mark>`;
-            }
-            return w;
-          });
-          
-          // Add remaining original words
-          for (let k = j + 1; k < words.length; k++) {
-            displayWords.push(words[k]);
-          }
-          
-          // Update the text node
-          nodeInfo.node.nodeValue = '';
-          const span = document.createElement('span');
-          span.innerHTML = displayWords.join(' ');
-          nodeInfo.parent.insertBefore(span, nodeInfo.node);
-          
-          processedWords++;
-          setTranslationProgress(Math.round((processedWords / totalWords) * 100));
-          
-          await new Promise(r => setTimeout(r, 30));
-        }
+        // Add blinking effect to parent element
+        nodeInfo.parent.classList.add('translating-line');
         
-        // Final update: all words translated, no highlight
-        nodeInfo.node.nodeValue = '';
-        const finalSpan = document.createElement('span');
-        finalSpan.textContent = translatedWords.join(' ');
+        // Translate the entire line
+        const translatedText = await translateText(originalText, targetLanguage);
         
-        // Remove all temporary spans
-        const parent = nodeInfo.parent;
-        const spans = parent.querySelectorAll('span');
-        spans.forEach(s => s.remove());
+        // Update the text node
+        nodeInfo.node.nodeValue = translatedText;
         
-        parent.insertBefore(finalSpan, nodeInfo.node);
+        // Wait a bit to show the translation
+        await new Promise(r => setTimeout(r, 200));
+        
+        // Remove blinking effect
+        nodeInfo.parent.classList.remove('translating-line');
+        
+        // Small delay before next line
+        await new Promise(r => setTimeout(r, 100));
       }
       
+      setCurrentLineIndex(-1);
       setIsTranslating(false);
       setTranslationProgress(100);
     }
 
     // Start translation after a small delay
     const timer = setTimeout(() => {
-      translateWordByWord();
+      translateLineByLine();
     }, 500);
 
     return () => {
       mounted = false;
       clearTimeout(timer);
     };
-  }, [textNodes, targetLanguage]);
+  }, [email.rawHtml, targetLanguage]);
 
   return (
     <div className="w-full relative" data-testid={`email-content-${emailId}`}>
+      <style jsx>{`
+        @keyframes blink-translate {
+          0%, 100% { 
+            background-color: transparent;
+            box-shadow: none;
+          }
+          50% { 
+            background-color: rgba(239, 68, 68, 0.1);
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+            border-radius: 4px;
+          }
+        }
+        
+        .translating-line {
+          animation: blink-translate 0.8s ease-in-out infinite;
+          padding: 2px 4px;
+          margin: -2px -4px;
+          display: inline-block;
+          transition: all 0.3s ease;
+        }
+      `}</style>
+      
       {isTranslating && (
-        <div className="absolute top-2 right-2 bg-neutral-800 rounded-lg px-3 py-1.5 flex items-center gap-2 z-10">
+        <div className="absolute top-2 right-2 bg-neutral-800/95 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2 z-10 shadow-lg border border-neutral-700">
           <Loader2 className="w-3 h-3 animate-spin text-red-500" />
-          <span className="text-xs text-neutral-400">
+          <span className="text-xs text-neutral-300 font-medium">
             Translating... {translationProgress}%
           </span>
         </div>
       )}
+      
       <div 
         ref={containerRef}
         className="email-content-wrapper rounded-xl overflow-hidden bg-white"
