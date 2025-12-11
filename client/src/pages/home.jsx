@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -156,32 +157,62 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
 
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    const langMap = {
-      'bn': 'bn-BD',
-      'hi': 'hi-IN',
-      'es': 'es-ES',
-      'en': 'en-US'
-    };
-    utterance.lang = langMap[language] || 'en-US';
-    utterance.rate = 0.85;
-    utterance.pitch = 1.1;
-    utterance.volume = 1;
+    return new Promise((resolve) => {
+      // Wait for voices to load
+      const speakWithVoices = () => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        const langMap = {
+          'bn': 'bn-BD',
+          'hi': 'hi-IN',
+          'es': 'es-ES',
+          'en': 'en-US'
+        };
+        
+        const targetLang = langMap[language] || 'en-US';
+        utterance.lang = targetLang;
+        
+        // Try to find a voice for the target language
+        const voices = window.speechSynthesis.getVoices();
+        const voice = voices.find(v => v.lang.startsWith(language)) || 
+                     voices.find(v => v.lang.startsWith(targetLang.split('-')[0]));
+        
+        if (voice) {
+          utterance.voice = voice;
+        }
+        
+        utterance.rate = 0.85;
+        utterance.pitch = 1.1;
+        utterance.volume = 1;
 
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      if (onStepComplete) {
-        setTimeout(onStepComplete, 500);
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          resolve();
+          if (onStepComplete) {
+            setTimeout(onStepComplete, 500);
+          }
+        };
+        utterance.onerror = (e) => {
+          console.error('Speech error:', e);
+          setIsSpeaking(false);
+          resolve();
+        };
+
+        speechRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+      };
+
+      // Check if voices are loaded
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        speakWithVoices();
+      } else {
+        // Wait for voices to load
+        window.speechSynthesis.onvoiceschanged = () => {
+          speakWithVoices();
+        };
       }
-    };
-    utterance.onerror = (e) => {
-      console.error('Speech error:', e);
-      setIsSpeaking(false);
-    };
-
-    speechRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    });
   };
 
   // Update position dynamically
@@ -189,8 +220,9 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
     if (!targetElement) return;
 
     const rect = targetElement.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const x = rect.left + rect.width / 2;
-    const y = rect.top + window.scrollY - 100;
+    const y = rect.top + scrollTop + rect.height / 2;
 
     setPosition({ x, y });
   };
@@ -295,7 +327,7 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0 }}
       style={{
-        position: 'absolute',
+        position: 'fixed',
         left: position.x,
         top: position.y,
         transform: 'translate(-50%, -50%)',
@@ -353,10 +385,9 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
       <motion.div
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="absolute left-full ml-6 top-1/2 -translate-y-1/2"
-        style={{ width: 'max-content', maxWidth: '300px' }}
+        className="absolute left-full ml-4 top-1/2 -translate-y-1/2 max-w-[90vw] sm:max-w-[300px]"
       >
-        <div className="relative bg-gradient-to-br from-red-600 via-red-500 to-pink-600 rounded-2xl p-4 shadow-2xl">
+        <div className="relative bg-gradient-to-br from-red-600 via-red-500 to-pink-600 rounded-2xl p-3 sm:p-4 shadow-2xl">
           {/* Tail */}
           <div className="absolute right-full top-1/2 -translate-y-1/2">
             <div className="w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-12 border-r-red-600" 
@@ -522,26 +553,60 @@ export default function Home() {
       return json;
     },
     onSuccess: (data) => {
-      setResults(data);
-      toast({ title: t.emailFound, description: t.foundLatestEmail });
-      
-      if (voiceGuideEnabled && data.emails?.length > 0) {
-        setTimeout(() => {
-          setCurrentGuideStep('link');
-          // Scroll to links
+      if (data.emails && data.emails.length > 0) {
+        setResults(data);
+        toast({ title: t.emailFound, description: t.foundLatestEmail });
+        
+        if (voiceGuideEnabled) {
           setTimeout(() => {
-            linkRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 500);
-        }, 1000);
+            setCurrentGuideStep('link');
+            // Scroll to links
+            setTimeout(() => {
+              linkRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 500);
+          }, 1000);
+        }
+      } else {
+        // No emails found
+        setResults(null);
+        throw new Error(t.noNetflixEmails || "No Netflix emails found");
       }
     },
     onError: (error) => {
       setResults(null);
+      toast({ 
+        title: t.searchFailed || "Search Failed", 
+        description: error.message,
+        variant: "destructive" 
+      });
+      
       if (voiceGuideEnabled) {
         setCurrentGuideStep('noResult');
-        const speak = new SpeechSynthesisUtterance(error.message);
-        window.speechSynthesis.speak(speak);
-        setTimeout(() => setCurrentGuideStep(null), 3000);
+        
+        // Translate and speak error message
+        translateSingle(
+          error.message || "No email found. Please try again with a different email address.",
+          language
+        ).then(translatedError => {
+          const speak = new SpeechSynthesisUtterance(translatedError);
+          const langMap = {
+            'bn': 'bn-BD',
+            'hi': 'hi-IN',
+            'es': 'es-ES',
+            'en': 'en-US'
+          };
+          speak.lang = langMap[language] || 'en-US';
+          
+          const voices = window.speechSynthesis.getVoices();
+          const voice = voices.find(v => v.lang.startsWith(language));
+          if (voice) speak.voice = voice;
+          
+          window.speechSynthesis.speak(speak);
+        });
+        
+        setTimeout(() => {
+          setCurrentGuideStep('input');
+        }, 4000);
       }
     },
   });
@@ -569,12 +634,29 @@ export default function Home() {
 
   const handleGuideStepComplete = () => {
     if (currentGuideStep === 'input') {
+      // Move to button after input step
       setTimeout(() => setCurrentGuideStep('button'), 500);
     } else if (currentGuideStep === 'button') {
-      setCurrentGuideStep(null);
+      // Don't clear - wait for form submission
+      // setCurrentGuideStep(null);
     } else if (currentGuideStep === 'link') {
       setCurrentGuideStep(null);
+    } else if (currentGuideStep === 'noResult') {
+      setTimeout(() => setCurrentGuideStep('input'), 1000);
     }
+  };
+
+  // Handle voice toggle
+  const handleVoiceToggle = () => {
+    const newState = !voiceGuideEnabled;
+    setVoiceGuideEnabled(newState);
+    
+    if (!newState) {
+      // Turning off - clean up
+      window.speechSynthesis.cancel();
+      setCurrentGuideStep(null);
+    }
+    // If turning on, useEffect will handle starting at 'input'
   };
 
   return (
@@ -655,7 +737,7 @@ export default function Home() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setVoiceGuideEnabled(!voiceGuideEnabled)}
+                  onClick={handleVoiceToggle}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     voiceGuideEnabled ? 'bg-green-600' : 'bg-neutral-600'
                   }`}
