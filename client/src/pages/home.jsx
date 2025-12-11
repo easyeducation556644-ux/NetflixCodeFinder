@@ -1,3 +1,4 @@
+
 import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -13,15 +14,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/hooks/use-language";
 
 // =================== Translation Helpers ===================
-
-function getTranslationCacheKey(text, lang) {
+function getCacheKey(text, lang) {
   return `translate_cache_${lang}_${btoa(text)}`;
 }
 
 async function translateText(text, targetLang) {
   if (!text || targetLang === "en") return text;
 
-  const cacheKey = getTranslationCacheKey(text, targetLang);
+  const cacheKey = getCacheKey(text, targetLang);
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
 
@@ -39,9 +39,12 @@ async function translateText(text, targetLang) {
   }
 }
 
-// Streaming translation line by line with highlight
-async function translateHTMLStreamingHighlight(html, targetLang, onUpdateLine) {
-  if (!html || targetLang === "en") return html;
+// =================== Streaming translation line-by-line ===================
+async function translateHTMLStreaming(html, targetLang, onUpdate) {
+  if (!html || targetLang === "en") {
+    onUpdate(html);
+    return;
+  }
 
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
@@ -50,53 +53,49 @@ async function translateHTMLStreamingHighlight(html, targetLang, onUpdateLine) {
   const textNodes = [];
   let node;
   while ((node = walker.nextNode())) {
-    const text = node.textContent.trim();
-    if (text.length > 0) textNodes.push(node);
+    if (node.textContent.trim()) textNodes.push(node);
   }
 
   for (let i = 0; i < textNodes.length; i++) {
-    const node = textNodes[i];
-    const translated = await translateText(node.textContent, targetLang);
-    node.textContent = translated;
+    const textNode = textNodes[i];
+    const translated = await translateText(textNode.textContent, targetLang);
+    textNode.textContent = translated;
 
-    // Wrap current line in <mark> for highlighting
-    const htmlWithHighlight = tempDiv.cloneNode(true);
-    textNodes.forEach((n, idx) => {
-      if (idx === i) {
-        const mark = document.createElement("mark");
-        mark.textContent = n.textContent;
-        n.parentNode.replaceChild(mark, n);
+    // Highlight current translating line
+    const clone = tempDiv.cloneNode(true);
+    const walkerClone = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
+    let idx = 0;
+    let n;
+    while ((n = walkerClone.nextNode())) {
+      if (n.textContent.trim()) {
+        if (idx === i) {
+          const mark = document.createElement("mark");
+          mark.textContent = n.textContent;
+          n.parentNode.replaceChild(mark, n);
+        }
+        idx++;
       }
-    });
+    }
 
-    onUpdateLine(i, htmlWithHighlight.innerHTML);
+    onUpdate(clone.innerHTML);
   }
-
-  return tempDiv.innerHTML;
 }
 
 // =================== EmailContent Component ===================
-function EmailContent({ email, emailId, targetLanguage }) {
+function EmailContent({ email, targetLanguage }) {
   const [translatedHtml, setTranslatedHtml] = useState(email.rawHtml);
 
   useEffect(() => {
     let isMounted = true;
-
-    async function doTranslate() {
+    const doTranslate = async () => {
       if (targetLanguage === "en") {
         setTranslatedHtml(email.rawHtml);
         return;
       }
-
-      try {
-        await translateHTMLStreamingHighlight(email.rawHtml, targetLanguage, (lineIndex, html) => {
-          if (isMounted) setTranslatedHtml(html);
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
+      await translateHTMLStreaming(email.rawHtml, targetLanguage, (html) => {
+        if (isMounted) setTranslatedHtml(html);
+      });
+    };
     doTranslate();
 
     return () => {
@@ -105,10 +104,10 @@ function EmailContent({ email, emailId, targetLanguage }) {
   }, [email.rawHtml, targetLanguage]);
 
   return (
-    <div className="w-full relative" data-testid={`email-content-${emailId}`}>
+    <div className="w-full relative">
       <div
         className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2"
-        dangerouslySetInnerHTML={{ __html: translatedHtml || "" }}
+        dangerouslySetInnerHTML={{ __html: translatedHtml }}
       />
     </div>
   );
@@ -130,9 +129,7 @@ export default function Home() {
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-    },
+    defaultValues: { email: "" },
   });
 
   const searchMutation = useMutation({
@@ -150,13 +147,10 @@ export default function Home() {
       setResults(data);
       toast({ title: t.emailFound, description: t.foundLatestEmail });
     },
-    onError: () => {
-      setResults(null);
-    },
+    onError: () => setResults(null),
   });
 
-  function onSubmit(data, event) {
-    if (event) event.preventDefault();
+  function onSubmit(data) {
     setResults(null);
     searchMutation.mutate(data);
   }
@@ -186,14 +180,7 @@ export default function Home() {
           </div>
 
           <Form {...form}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                form.handleSubmit(onSubmit)(e);
-              }}
-              className="space-y-4 notranslate"
-              translate="no"
-            >
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 notranslate" translate="no">
               <FormField
                 control={form.control}
                 name="email"
@@ -214,7 +201,6 @@ export default function Home() {
                   </FormItem>
                 )}
               />
-
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 rounded-lg">
                 {searchMutation.isPending ? (
                   <span className="flex items-center gap-2">
@@ -240,7 +226,7 @@ export default function Home() {
               </div>
 
               {results.emails.map((email, index) => (
-                <motion.div key={email.id || index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl" data-testid={`card-email-${index}`}>
+                <motion.div key={email.id || index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-xl">
                   <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/80">
                     <div className="flex items-center justify-between gap-2 sm:gap-3">
                       <div className="flex items-center gap-2 sm:gap-3">
@@ -259,7 +245,7 @@ export default function Home() {
                   </div>
 
                   <div className="p-2 sm:p-4">
-                    <EmailContent email={email} emailId={email.id || index} targetLanguage={language} />
+                    <EmailContent email={email} targetLanguage={language} />
                   </div>
                 </motion.div>
               ))}
@@ -269,4 +255,4 @@ export default function Home() {
       </motion.div>
     </div>
   );
-                                                                                                 }
+}
