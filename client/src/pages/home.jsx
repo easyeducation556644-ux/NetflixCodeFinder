@@ -113,6 +113,7 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
   const [isSpeaking, setIsSpeaking] = useState(false);
   const speechRef = useRef(null);
   const animationRef = useRef(null);
+  const updateIntervalRef = useRef(null);
 
   const steps = {
     input: {
@@ -133,21 +134,25 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
     }
   };
 
-  // Translate message
+  // Translate message when language changes
   useEffect(() => {
     if (!isEnabled || !currentStep) return;
 
     async function translate() {
       const msg = steps[currentStep]?.message || '';
-      const translated = await translateSingle(msg, language);
-      setTranslatedMessage(translated);
+      if (language === 'en') {
+        setTranslatedMessage(msg);
+      } else {
+        const translated = await translateSingle(msg, language);
+        setTranslatedMessage(translated);
+      }
     }
     translate();
   }, [currentStep, language, isEnabled]);
 
-  // Speak message
+  // Speak message in selected language
   const speak = (text) => {
-    if (!text) return;
+    if (!text || !isEnabled) return;
 
     window.speechSynthesis.cancel();
 
@@ -161,6 +166,7 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
     utterance.lang = langMap[language] || 'en-US';
     utterance.rate = 0.85;
     utterance.pitch = 1.1;
+    utterance.volume = 1;
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => {
@@ -169,64 +175,115 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
         setTimeout(onStepComplete, 500);
       }
     };
+    utterance.onerror = (e) => {
+      console.error('Speech error:', e);
+      setIsSpeaking(false);
+    };
 
     speechRef.current = utterance;
     window.speechSynthesis.speak(utterance);
   };
 
-  // Animate to target
+  // Update position dynamically
+  const updatePosition = (targetElement) => {
+    if (!targetElement) return;
+
+    const rect = targetElement.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + window.scrollY - 100;
+
+    setPosition({ x, y });
+  };
+
+  // Animate to target with ID/Class detection
   useEffect(() => {
-    if (!isEnabled || !currentStep || !translatedMessage) return;
+    if (!isEnabled || !currentStep) return;
 
     let targetElement = null;
 
+    // Detect element by ID/Class/Type
     if (currentStep === 'input') {
-      targetElement = document.querySelector('input[type="email"]');
+      targetElement = 
+        document.querySelector('#email-input') || 
+        document.querySelector('input[type="email"]') ||
+        document.querySelector('input[name="email"]');
     } else if (currentStep === 'button') {
-      targetElement = document.querySelector('button[type="submit"]');
-    } else if (currentStep === 'link' && linkRefs?.current) {
-      targetElement = linkRefs.current;
+      targetElement = 
+        document.querySelector('#search-button') ||
+        document.querySelector('button[type="submit"]');
+    } else if (currentStep === 'link') {
+      // Find Netflix link
+      const links = document.querySelectorAll('a[href*="netflix.com"]');
+      targetElement = Array.from(links).find(link => 
+        link.href.includes('/account/travel/verify') || 
+        link.href.includes('/account/update-primary-location')
+      );
+      
+      if (!targetElement && linkRefs?.current) {
+        targetElement = linkRefs.current;
+      }
     }
 
-    if (!targetElement) return;
+    if (!targetElement) {
+      console.warn('Target element not found for step:', currentStep);
+      return;
+    }
 
-    const animate = () => {
-      const rect = targetElement.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + window.scrollY - 100;
+    // Initial position
+    updatePosition(targetElement);
 
-      setPosition({ x, y });
+    // Continuous position update (for responsive/scroll)
+    updateIntervalRef.current = setInterval(() => {
+      updatePosition(targetElement);
+    }, 100);
 
-      if (currentStep === 'link') {
-        // Bounce animation for link
-        let bounceCount = 0;
-        const bounceInterval = setInterval(() => {
-          bounceCount++;
-          if (bounceCount > 6) {
-            clearInterval(bounceInterval);
-            speak(translatedMessage);
-          }
-        }, 300);
-        animationRef.current = bounceInterval;
-      } else {
-        setTimeout(() => speak(translatedMessage), 800);
+    // Speak after animation
+    const speakTimer = setTimeout(() => {
+      if (translatedMessage) {
+        speak(translatedMessage);
       }
-    };
+    }, 800);
 
-    const timer = setTimeout(animate, 300);
+    // Bounce animation for links
+    if (currentStep === 'link') {
+      let bounceCount = 0;
+      const bounceInterval = setInterval(() => {
+        bounceCount++;
+        if (bounceCount > 6) {
+          clearInterval(bounceInterval);
+        }
+      }, 300);
+      animationRef.current = bounceInterval;
+    }
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(speakTimer);
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+      }
       if (animationRef.current) {
         clearInterval(animationRef.current);
       }
     };
-  }, [isEnabled, currentStep, translatedMessage, linkRefs]);
+  }, [isEnabled, currentStep, linkRefs]);
+
+  // Re-speak when translation changes
+  useEffect(() => {
+    if (translatedMessage && isEnabled && currentStep && !isSpeaking) {
+      const timer = setTimeout(() => {
+        speak(translatedMessage);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [translatedMessage]);
 
   // Cleanup speech on unmount
   useEffect(() => {
     return () => {
       window.speechSynthesis.cancel();
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+      }
     };
   }, []);
 
@@ -574,6 +631,7 @@ export default function Home() {
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
                         <Input
+                          id="email-input"
                           placeholder={t.emailPlaceholder}
                           className="pl-10 h-10 bg-neutral-800 border-neutral-700 rounded-lg text-white placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary"
                           {...field}
@@ -611,6 +669,7 @@ export default function Home() {
               </div>
 
               <Button
+                id="search-button"
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 rounded-lg"
                 disabled={searchMutation.isPending}
