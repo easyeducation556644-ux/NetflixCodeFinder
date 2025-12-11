@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -61,7 +60,7 @@ async function translateTextBatch(texts, targetLang) {
 }
 
 async function translateSingle(text, targetLang) {
-  if (!text || text.trim() === "") return text;
+  if (!text || text.trim() === "" || targetLang === 'en') return text;
   
   try {
     const res = await fetch(
@@ -70,6 +69,7 @@ async function translateSingle(text, targetLang) {
     const data = await res.json();
     return data[0].map(item => item[0]).join("");
   } catch (err) {
+    console.error('Translation error:', err);
     return text;
   }
 }
@@ -108,13 +108,14 @@ function extractTextNodes(element) {
 }
 
 // Voice Guide Mouse Component
-function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, linkRefs }) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, linkRef }) {
+  const [position, setPosition] = useState({ x: -1000, y: -1000 });
   const [translatedMessage, setTranslatedMessage] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const speechRef = useRef(null);
-  const animationRef = useRef(null);
   const updateIntervalRef = useRef(null);
+  const targetElementRef = useRef(null);
 
   const steps = {
     input: {
@@ -135,9 +136,12 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
     }
   };
 
-  // Translate message when language changes
+  // Translate message when language or step changes
   useEffect(() => {
-    if (!isEnabled || !currentStep) return;
+    if (!isEnabled || !currentStep) {
+      setTranslatedMessage('');
+      return;
+    }
 
     async function translate() {
       const msg = steps[currentStep]?.message || '';
@@ -151,89 +155,121 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
     translate();
   }, [currentStep, language, isEnabled]);
 
-  // Speak message in selected language
+  // Speak message - FIXED for multilingual support
   const speak = (text) => {
     if (!text || !isEnabled) return;
 
+    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
     return new Promise((resolve) => {
-      // Wait for voices to load
-      const speakWithVoices = () => {
+      // Small delay to ensure cancel completes
+      setTimeout(() => {
         const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Language mapping
         const langMap = {
-          'bn': 'bn-BD',
+          'bn': 'bn-IN',  // Changed to bn-IN for better support
           'hi': 'hi-IN',
           'es': 'es-ES',
+          'fr': 'fr-FR',
           'en': 'en-US'
         };
         
         const targetLang = langMap[language] || 'en-US';
         utterance.lang = targetLang;
         
-        // Try to find a voice for the target language
-        const voices = window.speechSynthesis.getVoices();
-        const voice = voices.find(v => v.lang.startsWith(language)) || 
-                     voices.find(v => v.lang.startsWith(targetLang.split('-')[0]));
+        // Get available voices
+        let voices = window.speechSynthesis.getVoices();
         
-        if (voice) {
-          utterance.voice = voice;
-        }
-        
-        utterance.rate = 0.85;
-        utterance.pitch = 1.1;
-        utterance.volume = 1;
-
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          resolve();
-          if (onStepComplete) {
-            setTimeout(onStepComplete, 500);
+        // Function to set voice
+        const setVoice = () => {
+          voices = window.speechSynthesis.getVoices();
+          
+          // Try to find voice for target language
+          let voice = voices.find(v => v.lang === targetLang);
+          
+          // Fallback: try language code only (e.g., 'bn' instead of 'bn-IN')
+          if (!voice) {
+            voice = voices.find(v => v.lang.startsWith(language));
           }
-        };
-        utterance.onerror = (e) => {
-          console.error('Speech error:', e);
-          setIsSpeaking(false);
-          resolve();
+          
+          // Fallback: try any voice with same base language
+          if (!voice && targetLang.includes('-')) {
+            const baseLang = targetLang.split('-')[0];
+            voice = voices.find(v => v.lang.startsWith(baseLang));
+          }
+          
+          if (voice) {
+            utterance.voice = voice;
+            console.log('Using voice:', voice.name, voice.lang);
+          } else {
+            console.warn('No voice found for language:', targetLang);
+          }
+          
+          utterance.rate = 0.9;
+          utterance.pitch = 1.0;
+          utterance.volume = 1;
+
+          utterance.onstart = () => {
+            console.log('Speech started');
+            setIsSpeaking(true);
+          };
+          
+          utterance.onend = () => {
+            console.log('Speech ended');
+            setIsSpeaking(false);
+            resolve();
+            if (onStepComplete) {
+              setTimeout(onStepComplete, 800);
+            }
+          };
+          
+          utterance.onerror = (e) => {
+            console.error('Speech error:', e);
+            setIsSpeaking(false);
+            resolve();
+          };
+
+          speechRef.current = utterance;
+          window.speechSynthesis.speak(utterance);
         };
 
-        speechRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
-      };
-
-      // Check if voices are loaded
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        speakWithVoices();
-      } else {
-        // Wait for voices to load
-        window.speechSynthesis.onvoiceschanged = () => {
-          speakWithVoices();
-        };
-      }
+        // If voices not loaded yet, wait for them
+        if (voices.length === 0) {
+          window.speechSynthesis.onvoiceschanged = setVoice;
+        } else {
+          setVoice();
+        }
+      }, 100);
     });
   };
 
   // Update position dynamically
-  const updatePosition = (targetElement) => {
-    if (!targetElement) return;
+  const updatePosition = () => {
+    if (!targetElementRef.current) return;
 
-    const rect = targetElement.getBoundingClientRect();
+    const rect = targetElementRef.current.getBoundingClientRect();
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // Calculate center position
     const x = rect.left + rect.width / 2;
     const y = rect.top + scrollTop + rect.height / 2;
 
     setPosition({ x, y });
   };
 
-  // Animate to target with ID/Class detection
+  // Main effect to handle step changes
   useEffect(() => {
-    if (!isEnabled || !currentStep) return;
+    if (!isEnabled || !currentStep) {
+      setIsVisible(false);
+      targetElementRef.current = null;
+      return;
+    }
 
     let targetElement = null;
 
-    // Detect element by ID/Class/Type
+    // Find target element based on step
     if (currentStep === 'input') {
       targetElement = 
         document.querySelector('#email-input') || 
@@ -244,72 +280,79 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
         document.querySelector('#search-button') ||
         document.querySelector('button[type="submit"]');
     } else if (currentStep === 'link') {
-      // Find Netflix link
-      const links = document.querySelectorAll('a[href*="netflix.com"]');
-      targetElement = Array.from(links).find(link => 
-        link.href.includes('/account/travel/verify') || 
-        link.href.includes('/account/update-primary-location')
-      );
-      
-      if (!targetElement && linkRefs?.current) {
-        targetElement = linkRefs.current;
-      }
+      // FIXED: Better link detection in email content
+      setTimeout(() => {
+        // First try to find Netflix links in email content
+        const emailContainer = document.querySelector('.email-content-wrapper');
+        if (emailContainer) {
+          const links = emailContainer.querySelectorAll('a');
+          targetElement = Array.from(links).find(link => {
+            const href = link.href || '';
+            const text = link.textContent || '';
+            return (
+              href.includes('netflix.com') || 
+              href.includes('account') ||
+              href.includes('verify') ||
+              text.toLowerCase().includes('verify') ||
+              text.toLowerCase().includes('confirm') ||
+              text.toLowerCase().includes('click here')
+            );
+          });
+        }
+        
+        // Fallback to any link in email
+        if (!targetElement && emailContainer) {
+          const allLinks = emailContainer.querySelectorAll('a[href]');
+          targetElement = allLinks[0];
+        }
+
+        if (targetElement) {
+          targetElementRef.current = targetElement;
+          updatePosition();
+          setIsVisible(true);
+          
+          // Speak after finding element
+          if (translatedMessage) {
+            setTimeout(() => speak(translatedMessage), 500);
+          }
+        } else {
+          console.warn('Link not found in email content');
+        }
+      }, 500);
+      return;
     }
 
     if (!targetElement) {
       console.warn('Target element not found for step:', currentStep);
+      setIsVisible(false);
       return;
     }
 
-    // Initial position
-    updatePosition(targetElement);
+    targetElementRef.current = targetElement;
+    
+    // Set visible and update position
+    setIsVisible(true);
+    updatePosition();
 
-    // Continuous position update (for responsive/scroll)
-    updateIntervalRef.current = setInterval(() => {
-      updatePosition(targetElement);
-    }, 100);
+    // Start position update interval
+    updateIntervalRef.current = setInterval(updatePosition, 200);
 
-    // Speak after animation
+    // Speak after short delay
     const speakTimer = setTimeout(() => {
       if (translatedMessage) {
         speak(translatedMessage);
       }
     }, 800);
 
-    // Bounce animation for links
-    if (currentStep === 'link') {
-      let bounceCount = 0;
-      const bounceInterval = setInterval(() => {
-        bounceCount++;
-        if (bounceCount > 6) {
-          clearInterval(bounceInterval);
-        }
-      }, 300);
-      animationRef.current = bounceInterval;
-    }
-
     return () => {
       clearTimeout(speakTimer);
       if (updateIntervalRef.current) {
         clearInterval(updateIntervalRef.current);
       }
-      if (animationRef.current) {
-        clearInterval(animationRef.current);
-      }
     };
-  }, [isEnabled, currentStep, linkRefs]);
+  }, [isEnabled, currentStep, translatedMessage]);
 
-  // Re-speak when translation changes
-  useEffect(() => {
-    if (translatedMessage && isEnabled && currentStep && !isSpeaking) {
-      const timer = setTimeout(() => {
-        speak(translatedMessage);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [translatedMessage]);
-
-  // Cleanup speech on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       window.speechSynthesis.cancel();
@@ -319,7 +362,7 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
     };
   }, []);
 
-  if (!isEnabled || !currentStep) return null;
+  if (!isEnabled || !currentStep || !isVisible || position.x < 0) return null;
 
   return (
     <motion.div
@@ -338,13 +381,13 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
       {/* Mouse Pointer */}
       <motion.div
         animate={currentStep === 'link' ? {
-          x: [0, 20, 0, -20, 0],
-          y: [0, -10, 0, -10, 0]
+          x: [0, 15, 0, -15, 0],
+          y: [0, -8, 0, -8, 0]
         } : {
           y: [0, -10, 0]
         }}
         transition={{
-          duration: currentStep === 'link' ? 1.8 : 2,
+          duration: currentStep === 'link' ? 1.5 : 2,
           repeat: Infinity,
           ease: "easeInOut"
         }}
@@ -353,24 +396,16 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
         <MousePointer2 
           className="w-12 h-12" 
           style={{
-            fill: 'url(#mouseGradient)',
+            fill: '#e50914',
             filter: 'drop-shadow(0 4px 12px rgba(229, 9, 20, 0.6))'
           }}
         />
-        <svg width="0" height="0">
-          <defs>
-            <linearGradient id="mouseGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style={{ stopColor: '#e50914', stopOpacity: 1 }} />
-              <stop offset="100%" style={{ stopColor: '#ff6b6b', stopOpacity: 1 }} />
-            </linearGradient>
-          </defs>
-        </svg>
 
         {/* Ripple effect */}
         <motion.div
           animate={{
-            scale: [1, 2, 1],
-            opacity: [0.6, 0, 0.6]
+            scale: [1, 2.5, 1],
+            opacity: [0.7, 0, 0.7]
           }}
           transition={{
             duration: 2,
@@ -385,35 +420,35 @@ function VoiceGuideMouse({ isEnabled, currentStep, language, onStepComplete, lin
       <motion.div
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="absolute left-full ml-4 top-1/2 -translate-y-1/2 max-w-[90vw] sm:max-w-[300px]"
+        className="absolute left-full ml-4 top-1/2 -translate-y-1/2 max-w-[85vw] sm:max-w-[320px]"
       >
         <div className="relative bg-gradient-to-br from-red-600 via-red-500 to-pink-600 rounded-2xl p-3 sm:p-4 shadow-2xl">
           {/* Tail */}
           <div className="absolute right-full top-1/2 -translate-y-1/2">
-            <div className="w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-12 border-r-red-600" 
-                 style={{ borderRightWidth: '20px' }} />
+            <div className="w-0 h-0 border-t-[12px] border-t-transparent border-b-[12px] border-b-transparent border-r-[20px] border-r-red-600" />
           </div>
 
           {/* Content */}
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">{steps[currentStep]?.icon}</span>
-            <div className="flex-1">
-              <p className="text-white text-sm font-medium leading-relaxed">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <span className="text-xl sm:text-2xl flex-shrink-0">{steps[currentStep]?.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-xs sm:text-sm font-medium leading-relaxed break-words">
                 {translatedMessage}
               </p>
             </div>
             {isSpeaking && (
               <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 0.5, repeat: Infinity }}
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 0.6, repeat: Infinity }}
+                className="flex-shrink-0"
               >
-                <Volume2 className="w-5 h-5 text-white" />
+                <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </motion.div>
             )}
           </div>
 
           {/* Glow effect */}
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent" />
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
         </div>
       </motion.div>
     </motion.div>
@@ -447,6 +482,10 @@ function EmailContent({ email, emailId, targetLanguage }) {
   // Start translation
   useEffect(() => {
     if (textNodesData.length === 0 || currentLanguage !== targetLanguage) return;
+    if (targetLanguage === 'en') {
+      setIsTranslating(false);
+      return;
+    }
 
     let mounted = true;
 
@@ -486,7 +525,7 @@ function EmailContent({ email, emailId, targetLanguage }) {
 
   return (
     <div className="w-full relative">
-      <style jsx>{`
+      <style>{`
         @keyframes blink-translate {
           0%, 100% { 
             background-color: transparent;
@@ -506,6 +545,20 @@ function EmailContent({ email, emailId, targetLanguage }) {
           display: inline-block;
           transition: all 0.2s ease;
         }
+        
+        .email-content-wrapper a {
+          color: #e50914 !important;
+          text-decoration: underline !important;
+          font-weight: 600 !important;
+          padding: 4px 8px !important;
+          border-radius: 4px !important;
+          display: inline-block !important;
+          margin: 4px 0 !important;
+        }
+        
+        .email-content-wrapper a:hover {
+          background-color: rgba(229, 9, 20, 0.1) !important;
+        }
       `}</style>
 
       {isTranslating && (
@@ -519,10 +572,11 @@ function EmailContent({ email, emailId, targetLanguage }) {
 
       <div 
         ref={containerRef}
-        className="email-content-wrapper rounded-xl overflow-hidden bg-white"
+        className="email-content-wrapper rounded-xl overflow-hidden bg-white p-4"
         style={{
           wordWrap: 'break-word',
-          overflowWrap: 'break-word'
+          overflowWrap: 'break-word',
+          maxWidth: '100%'
         }}
       />
     </div>
@@ -558,16 +612,19 @@ export default function Home() {
         toast({ title: t.emailFound, description: t.foundLatestEmail });
         
         if (voiceGuideEnabled) {
+          // Wait for email to render, then show link pointer
           setTimeout(() => {
             setCurrentGuideStep('link');
-            // Scroll to links
+            // Scroll to email content
             setTimeout(() => {
-              linkRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 500);
-          }, 1000);
+              const emailContent = document.querySelector('.email-content-wrapper');
+              if (emailContent) {
+                emailContent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }, 300);
+          }, 1500);
         }
       } else {
-        // No emails found
         setResults(null);
         throw new Error(t.noNetflixEmails || "No Netflix emails found");
       }
@@ -588,20 +645,21 @@ export default function Home() {
           error.message || "No email found. Please try again with a different email address.",
           language
         ).then(translatedError => {
-          const speak = new SpeechSynthesisUtterance(translatedError);
+          const utterance = new SpeechSynthesisUtterance(translatedError);
           const langMap = {
-            'bn': 'bn-BD',
+            'bn': 'bn-IN',
             'hi': 'hi-IN',
             'es': 'es-ES',
             'en': 'en-US'
           };
-          speak.lang = langMap[language] || 'en-US';
+          const targetLang = langMap[language] || 'en-US';
+          utterance.lang = targetLang;
           
           const voices = window.speechSynthesis.getVoices();
           const voice = voices.find(v => v.lang.startsWith(language));
-          if (voice) speak.voice = voice;
+          if (voice) utterance.voice = voice;
           
-          window.speechSynthesis.speak(speak);
+          window.speechSynthesis.speak(utterance);
         });
         
         setTimeout(() => {
@@ -625,6 +683,7 @@ export default function Home() {
   useEffect(() => {
     if (!voiceGuideEnabled) {
       setCurrentGuideStep(null);
+      window.speechSynthesis.cancel();
       return;
     }
 
@@ -634,40 +693,39 @@ export default function Home() {
 
   const handleGuideStepComplete = () => {
     if (currentGuideStep === 'input') {
-      // Move to button after input step
-      setTimeout(() => setCurrentGuideStep('button'), 500);
+      setTimeout(() => setCurrentGuideStep('button'), 800);
     } else if (currentGuideStep === 'button') {
-      // Don't clear - wait for form submission
-      // setCurrentGuideStep(null);
+      // Stay on button until form is submitted
     } else if (currentGuideStep === 'link') {
-      setCurrentGuideStep(null);
+      setTimeout(() => setCurrentGuideStep(null), 2000);
     } else if (currentGuideStep === 'noResult') {
-      setTimeout(() => setCurrentGuideStep('input'), 1000);
+      setTimeout(() => setCurrentGuideStep('input'), 1500);
     }
   };
 
-  // Handle voice toggle
   const handleVoiceToggle = () => {
     const newState = !voiceGuideEnabled;
     setVoiceGuideEnabled(newState);
     
     if (!newState) {
-      // Turning off - clean up
       window.speechSynthesis.cancel();
       setCurrentGuideStep(null);
     }
-    // If turning on, useEffect will handle starting at 'input'
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-2 sm:p-4 bg-neutral-950 relative">
-      <VoiceGuideMouse
-        isEnabled={voiceGuideEnabled}
-        currentStep={currentGuideStep}
-        language={language}
-        onStepComplete={handleGuideStepComplete}
-        linkRefs={linkRef}
-      />
+    <div className="min-h-screen w-full flex flex-col items-center p-2 sm:p-4 bg-neutral-950 relative overflow-x-hidden">
+      <AnimatePresence>
+        {voiceGuideEnabled && currentGuideStep && (
+          <VoiceGuideMouse
+            isEnabled={voiceGuideEnabled}
+            currentStep={currentGuideStep}
+            language={language}
+            onStepComplete={handleGuideStepComplete}
+            linkRef={linkRef}
+          />
+        )}
+      </AnimatePresence>
 
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -676,7 +734,7 @@ export default function Home() {
         className="w-full max-w-4xl space-y-4 sm:space-y-6 py-4 sm:py-8"
       >
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold text-primary tracking-wider font-display">{t.title}</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-primary tracking-wider font-display">{t.title}</h1>
           <p className="text-neutral-500 text-sm">{t.subtitle}</p>
         </div>
 
@@ -684,10 +742,10 @@ export default function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-neutral-900 rounded-xl p-6 border border-neutral-800"
+          className="bg-neutral-900 rounded-xl p-4 sm:p-6 border border-neutral-800"
         >
           <div className="text-center mb-5">
-            <h2 className="text-lg font-medium text-white">{t.findLatestEmail}</h2>
+            <h2 className="text-base sm:text-lg font-medium text-white">{t.findLatestEmail}</h2>
             <p className="text-neutral-500 text-xs mt-1">{t.enterEmailDescription}</p>
           </div>
 
@@ -706,7 +764,7 @@ export default function Home() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-white text-base font-bold">
+                    <FormLabel className="text-white text-sm sm:text-base font-bold">
                       {t.enterNetflixEmail}
                     </FormLabel>
                     <FormControl>
@@ -733,7 +791,7 @@ export default function Home() {
                   ) : (
                     <VolumeX className="w-4 h-4 text-neutral-500" />
                   )}
-                  <span className="text-sm text-neutral-300">Voice Guide</span>
+                  <span className="text-xs sm:text-sm text-neutral-300">Voice Guide</span>
                 </div>
                 <button
                   type="button"
@@ -797,16 +855,16 @@ export default function Home() {
                       <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-full flex items-center justify-center">
                         <span className="text-white text-lg sm:text-xl font-bold">N</span>
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="font-semibold text-white text-sm sm:text-base">Netflix</p>
                         <p className="text-neutral-400 text-xs sm:text-sm line-clamp-2">{email.subject}</p>
                       </div>
                     </div>
-                    <span className="text-neutral-500 text-xs">
+                    <span className="text-neutral-500 text-xs flex-shrink-0 ml-2">
                       {new Date(email.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
-                  <div className="p-2 sm:p-4" ref={linkRef}>
+                  <div className="p-2 sm:p-4" ref={idx === 0 ? linkRef : null}>
                     <EmailContent email={email} emailId={email.id || idx} targetLanguage={language} />
                   </div>
                 </motion.div>
@@ -821,12 +879,12 @@ export default function Home() {
               exit={{ opacity: 0 }}
               className="bg-neutral-900 rounded-xl p-4 border border-red-900/50 flex items-start gap-3"
             >
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-4 h-4 text-red-400" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h3 className="text-red-400 font-medium text-sm">{t.searchFailed}</h3>
-                <p className="text-neutral-500 text-xs mt-0.5">{searchMutation.error?.message}</p>
+                <p className="text-neutral-500 text-xs mt-0.5 break-words">{searchMutation.error?.message}</p>
               </div>
             </motion.div>
           )}
