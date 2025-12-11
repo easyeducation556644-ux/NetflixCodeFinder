@@ -18,16 +18,13 @@ const translationCache = new Map();
 // Google Translate helper
 async function translateText(text, targetLang) {
   if (!text) return "";
-  // English select korleo translation korbe
-  const lang = targetLang || "en";
+  const lang = targetLang || "en"; // English select korleo translate hobe
   const cacheKey = `${text}-${lang}`;
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
 
   try {
     const res = await fetch(
-      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(
-        text
-      )}`
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`
     );
     const data = await res.json();
     const translated = data[0].map(item => item[0]).join("");
@@ -39,33 +36,45 @@ async function translateText(text, targetLang) {
   }
 }
 
-// Email content with progressive line-by-line translation
+// Email content with progressive word-by-word translation
 function EmailContent({ email, emailId, targetLanguage }) {
   const [translatedLines, setTranslatedLines] = useState(email.rawHtml.split("\n"));
   const [currentLine, setCurrentLine] = useState(-1);
+  const [currentWord, setCurrentWord] = useState(-1);
   const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     const lines = email.rawHtml.split("\n");
 
-    async function translateLines() {
+    async function translateWords() {
       setIsTranslating(true);
-      const newTranslated = [];
+      const newTranslated = lines.map(line => line); // initially raw
 
       for (let i = 0; i < lines.length; i++) {
         if (!isMounted) break;
         setCurrentLine(i);
-        const translated = await translateText(lines[i], targetLanguage);
-        newTranslated[i] = translated;
-        setTranslatedLines([...newTranslated]);
+
+        const words = lines[i].split(" ");
+        const translatedWords = [];
+
+        for (let j = 0; j < words.length; j++) {
+          if (!isMounted) break;
+          setCurrentWord(j);
+          const translatedWord = await translateText(words[j], targetLanguage);
+          translatedWords[j] = translatedWord;
+          newTranslated[i] = translatedWords.join(" ");
+          setTranslatedLines([...newTranslated]);
+          await new Promise(r => setTimeout(r, 50)); // small delay for streaming effect
+        }
+        setCurrentWord(-1);
       }
 
       setCurrentLine(-1);
       setIsTranslating(false);
     }
 
-    translateLines();
+    translateWords();
 
     return () => { isMounted = false; };
   }, [email.rawHtml, targetLanguage]);
@@ -79,11 +88,25 @@ function EmailContent({ email, emailId, targetLanguage }) {
         </div>
       )}
       <div className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2">
-        {translatedLines.map((line, idx) => (
-          <div key={idx} className="whitespace-pre-wrap">
-            {idx === currentLine ? <mark>{line || "\u00A0"}</mark> : line || "\u00A0"}
-          </div>
-        ))}
+        {translatedLines.map((line, lineIdx) => {
+          if (lineIdx === currentLine) {
+            const words = line.split(" ");
+            return (
+              <div key={lineIdx} className="whitespace-pre-wrap">
+                {words.map((word, wordIdx) => (
+                  <span key={wordIdx}>
+                    {wordIdx === currentWord ? <mark>{word}</mark> : word}{" "}
+                  </span>
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={lineIdx} className="whitespace-pre-wrap">
+              {line || "\u00A0"}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
