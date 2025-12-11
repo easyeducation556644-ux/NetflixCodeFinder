@@ -36,59 +36,129 @@ async function translateText(text, targetLang) {
   }
 }
 
-// Parse HTML and return text nodes
+// Parse HTML and return text nodes (Updated to safely handle HTML and exclude headers/scripts/styles)
 function parseHTMLToLines(html) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
-  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
   const lines = [];
-  while (walker.nextNode()) {
-    const text = walker.currentNode.nodeValue.trim();
-    if (text) lines.push(text);
+
+  function isVisibleText(node) {
+    if (node.parentNode) {
+      const parentName = node.parentNode.nodeName.toLowerCase();
+      // Exclude text within style, script, head, or title tags
+      if (parentName === 'style' || parentName === 'script' || parentName === 'head' || parentName === 'title') {
+        return false;
+      }
+    }
+    return true;
   }
+
+  // Use a recursive function to traverse the body and collect visible text
+  function collectText(element) {
+    for (let i = 0; i < element.childNodes.length; i++) {
+      const node = element.childNodes[i];
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Ensure the text is not just whitespace and is inside a visible element
+        const text = node.nodeValue.trim();
+        if (text && isVisibleText(node)) {
+          // Splitting by newline might capture blocks correctly
+          text.split('\n').forEach(line => {
+             const trimmedLine = line.trim();
+             if (trimmedLine) lines.push(trimmedLine);
+          });
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        // Only traverse elements that are not style/script/head
+        const tagName = node.tagName.toLowerCase();
+        if (tagName !== 'style' && tagName !== 'script' && tagName !== 'head') {
+          collectText(node);
+        }
+      }
+    }
+  }
+
+  // Start collection from the document body
+  if (doc.body) {
+    collectText(doc.body);
+  }
+
   return lines;
 }
 
 // Email content component
 function EmailContent({ email, emailId, targetLanguage }) {
-  const [rawLines] = useState(parseHTMLToLines(email.rawHtml));
-  const [translatedLines, setTranslatedLines] = useState([...rawLines]);
+  // Rerunning parseHTMLToLines only if email.rawHtml changes
+  const [rawLines, setRawLines] = useState(() => parseHTMLToLines(email.rawHtml));
+  const [translatedLines, setTranslatedLines] = useState(() => [...rawLines]);
   const [currentLine, setCurrentLine] = useState(-1);
   const [currentWord, setCurrentWord] = useState(-1);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isRawShown, setIsRawShown] = useState(true); // Feature: Raw email shown first
+
+  // Reset lines when emailId changes (if navigating between emails)
+  useEffect(() => {
+    const newRawLines = parseHTMLToLines(email.rawHtml);
+    setRawLines(newRawLines);
+    setTranslatedLines(newRawLines); // Initially show raw lines
+    setIsRawShown(true); // Start by showing raw
+  }, [email.rawHtml, emailId]);
+
 
   useEffect(() => {
-    let mounted = true;
+    // Only run translation if the target language changes AND we are not showing the raw email initially
+    if (!isRawShown || targetLanguage) { 
+      let mounted = true;
 
-    async function translateWordByWord() {
-      setIsTranslating(true);
-      const newTranslated = [...rawLines];
+      async function translateWordByWord() {
+        setIsTranslating(true);
+        setIsRawShown(false); // Start translation, hide raw view
+        
+        // Start translation from rawLines
+        const newTranslated = [...rawLines];
 
-      for (let i = 0; i < rawLines.length; i++) {
-        if (!mounted) break;
-        setCurrentLine(i);
-        const words = rawLines[i].split(/\s+/);
-        const translatedWords = [];
-
-        for (let j = 0; j < words.length; j++) {
+        for (let i = 0; i < rawLines.length; i++) {
           if (!mounted) break;
-          setCurrentWord(j);
-          const tWord = await translateText(words[j], targetLanguage);
-          translatedWords[j] = tWord;
-          newTranslated[i] = translatedWords.join(" ");
-          setTranslatedLines([...newTranslated]);
-          await new Promise(r => setTimeout(r, 50));
+          setCurrentLine(i);
+          const words = rawLines[i].split(/\s+/);
+          const translatedWords = [];
+
+          for (let j = 0; j < words.length; j++) {
+            if (!mounted) break;
+            setCurrentWord(j);
+            // Translate the raw word
+            const tWord = await translateText(words[j], targetLanguage);
+            translatedWords[j] = tWord;
+            
+            // Update the state to stream word by word
+            newTranslated[i] = translatedWords.join(" ");
+            setTranslatedLines([...newTranslated]);
+            await new Promise(r => setTimeout(r, 50)); // Word streaming delay
+          }
+          setCurrentWord(-1);
         }
-        setCurrentWord(-1);
+        setCurrentLine(-1);
+        setIsTranslating(false);
       }
-      setCurrentLine(-1);
-      setIsTranslating(false);
+      
+      // Delay translation slightly to ensure raw email is displayed first
+      const timer = setTimeout(() => {
+        translateWordByWord();
+      }, 500); 
+
+      return () => { 
+        mounted = false; 
+        clearTimeout(timer);
+      };
     }
+    
+    // Cleanup if targetLanguage changes before translation starts
+    return () => {};
+    
+  }, [rawLines, targetLanguage, isRawShown]);
 
-    translateWordByWord();
-
-    return () => { mounted = false; };
-  }, [rawLines, targetLanguage]);
+  // Determine which lines to display
+  const displayLines = isRawShown ? rawLines : translatedLines;
 
   return (
     <div className="w-full relative" data-testid={`email-content-${emailId}`}>
@@ -99,8 +169,8 @@ function EmailContent({ email, emailId, targetLanguage }) {
         </div>
       )}
       <div className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2">
-        {translatedLines.map((line, lIdx) => {
-          if (lIdx === currentLine) {
+        {displayLines.map((line, lIdx) => {
+          if (!isRawShown && lIdx === currentLine) { // Highlight only during translation
             const words = line.split(/\s+/);
             return (
               <div key={lIdx} className="whitespace-pre-wrap">
@@ -114,6 +184,10 @@ function EmailContent({ email, emailId, targetLanguage }) {
           }
           return <div key={lIdx} className="whitespace-pre-wrap">{line || "\u00A0"}</div>;
         })}
+      </div>
+      {/* Small indicator for the language (optional, but helpful for UI) */}
+      <div className="text-right text-xs text-neutral-500 mt-2">
+         {isRawShown ? "Raw Content" : `Translated to: ${targetLanguage.toUpperCase()}`}
       </div>
     </div>
   );
