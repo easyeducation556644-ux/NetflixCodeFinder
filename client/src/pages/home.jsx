@@ -18,7 +18,7 @@ const translationCache = new Map();
 // Google Translate helper
 async function translateText(text, targetLang) {
   if (!text) return "";
-  const lang = targetLang || "en"; // English select korleo translate hobe
+  const lang = targetLang || "en";
   const cacheKey = `${text}-${lang}`;
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
 
@@ -38,43 +38,46 @@ async function translateText(text, targetLang) {
 
 // Email content with progressive word-by-word translation
 function EmailContent({ email, emailId, targetLanguage }) {
-  const [translatedLines, setTranslatedLines] = useState(email.rawHtml.split("\n"));
-  const [currentLine, setCurrentLine] = useState(-1);
-  const [currentWord, setCurrentWord] = useState(-1);
+  const [translatedHtml, setTranslatedHtml] = useState(email.rawHtml);
   const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    const lines = email.rawHtml.split("\n");
 
-    async function translateWords() {
+    async function translateHTML() {
       setIsTranslating(true);
-      const newTranslated = lines.map(line => line); // initially raw
 
-      for (let i = 0; i < lines.length; i++) {
-        if (!isMounted) break;
-        setCurrentLine(i);
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(email.rawHtml, "text/html");
 
-        const words = lines[i].split(" ");
-        const translatedWords = [];
+      async function translateNode(node) {
+        if (!isMounted) return;
 
-        for (let j = 0; j < words.length; j++) {
-          if (!isMounted) break;
-          setCurrentWord(j);
-          const translatedWord = await translateText(words[j], targetLanguage);
-          translatedWords[j] = translatedWord;
-          newTranslated[i] = translatedWords.join(" ");
-          setTranslatedLines([...newTranslated]);
-          await new Promise(r => setTimeout(r, 50)); // small delay for streaming effect
+        if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
+          const words = node.nodeValue.split(/\s+/);
+          let translatedWords = [];
+
+          for (let i = 0; i < words.length; i++) {
+            if (!isMounted) break;
+            const translatedWord = await translateText(words[i], targetLanguage);
+            translatedWords.push(translatedWord);
+            node.nodeValue = translatedWords.join(" ");
+            setTranslatedHtml(doc.body.innerHTML);
+            await new Promise(res => setTimeout(res, 50)); // small delay for streaming effect
+          }
+        } else {
+          for (let child of node.childNodes) {
+            await translateNode(child);
+          }
         }
-        setCurrentWord(-1);
       }
 
-      setCurrentLine(-1);
-      setIsTranslating(false);
+      await translateNode(doc.body);
+
+      if (isMounted) setIsTranslating(false);
     }
 
-    translateWords();
+    translateHTML();
 
     return () => { isMounted = false; };
   }, [email.rawHtml, targetLanguage]);
@@ -87,27 +90,10 @@ function EmailContent({ email, emailId, targetLanguage }) {
           <span className="text-xs text-neutral-400">Translating...</span>
         </div>
       )}
-      <div className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2">
-        {translatedLines.map((line, lineIdx) => {
-          if (lineIdx === currentLine) {
-            const words = line.split(" ");
-            return (
-              <div key={lineIdx} className="whitespace-pre-wrap">
-                {words.map((word, wordIdx) => (
-                  <span key={wordIdx}>
-                    {wordIdx === currentWord ? <mark>{word}</mark> : word}{" "}
-                  </span>
-                ))}
-              </div>
-            );
-          }
-          return (
-            <div key={lineIdx} className="whitespace-pre-wrap">
-              {line || "\u00A0"}
-            </div>
-          );
-        })}
-      </div>
+      <div
+        className="email-content-wrapper rounded-xl overflow-hidden bg-white p-2"
+        dangerouslySetInnerHTML={{ __html: translatedHtml }}
+      />
     </div>
   );
 }
