@@ -1,6 +1,6 @@
 import Imap from "imap";
 import { simpleParser } from "mailparser";
-import translatte from "translatte";
+// import translatte from "translatte"; // অনুবাদ মডিউলটি আর প্রয়োজন নেই
 
 // --- নতুন Helper ফাংশন ---
 
@@ -31,7 +31,7 @@ function isRelevantNetflixLinkEmail(htmlContent, textContent) {
     return includesLink1 || includesLink2;
 }
 
-// --- আপনার বিদ্যমান Helper ফাংশন (পরিবর্তন করা হয়নি) ---
+// --- আপনার বিদ্যমান Helper ফাংশন ---
 
 function escapeHtml(text) {
     if (!text) return '';
@@ -105,83 +105,27 @@ function sanitizeUrl(url) {
     return trimmedUrl;
 }
 
+// অনুবাদের প্রয়োজন নেই, তাই এই ফাংশনটি এখন শুধু মূল টেক্সটটি ফেরত দেবে।
 async function translateToEnglish(text) {
-    if (!text || text.trim() === "") return text;
-
-    try {
-        if (text.length > 3000) {
-            const chunks = [];
-            const sentences = text.split(/(?<=[.!?])\s+/);
-            let currentChunk = "";
-
-            for (const sentence of sentences) {
-                if ((currentChunk + sentence).length > 2000) {
-                    if (currentChunk) chunks.push(currentChunk.trim());
-                    currentChunk = sentence;
-                } else {
-                    currentChunk += " " + sentence;
-                }
-            }
-            if (currentChunk) chunks.push(currentChunk.trim());
-
-            const translatedChunks = [];
-            for (const chunk of chunks) {
-                try {
-                    const result = await translatte(chunk, { to: "en" });
-                    translatedChunks.push(result.text);
-                } catch (e) {
-                    translatedChunks.push(chunk);
-                }
-            }
-            return translatedChunks.join(" ");
-        }
-
-        const result = await translatte(text, { to: "en" });
-        return result.text;
-    } catch (error) {
-        // Translation error, return original text
-        return text;
-    }
+    return text;
 }
 
-async function translateHtmlContentPreserveOriginal(html) {
+// এই ফাংশনটি এখন শুধু লিঙ্কগুলি স্যানিটাইজ করবে এবং গুরুত্বপূর্ণ বাটনগুলিতে স্টাইল যোগ করবে, কোনো অনুবাদ করবে না।
+async function sanitizeAndStyleHtml(html) {
     if (!html || html.trim() === "") return html;
 
     let processedHtml = html
+        // নিরাপত্তার জন্য script ট্যাগগুলি সরিয়ে দেওয়া হলো
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
 
-    const textToTranslate = [];
-    let textIndex = 0;
-
-    processedHtml = processedHtml.replace(/>([^<]+)</g, (match, text) => {
-        const trimmedText = text.trim();
-        if (trimmedText && trimmedText.length > 1 && !/^[\s\d.,;:!?-_=+*#@$%^&()\[\]{}|\\\/<>"' ]+$/.test(trimmedText)) {
-            const placeholder = `>___TEXT_${textIndex}___<`;
-            textToTranslate.push({ index: textIndex, text: trimmedText });
-            textIndex++;
-            return placeholder;
-        }
-        return match;
-    });
-
-    for (const item of textToTranslate) {
-        try {
-            const translated = await translateToEnglish(item.text);
-            item.translated = translated;
-        } catch (e) {
-            item.translated = item.text;
-        }
-    }
-
-    for (const item of textToTranslate) {
-        processedHtml = processedHtml.replace(`>___TEXT_${item.index}___<`, `>${escapeHtml(item.translated)}<`);
-    }
-
+    // লিঙ্ক স্যানিটাইজেশন এবং স্টাইলিং:
+    // Netflix-এর 'Yes it was me' বা 'Get Code' লিঙ্কে স্টাইল যোগ করা হচ্ছে
     processedHtml = processedHtml.replace(/<a([^>]*)href\s*=\s*['"]([^'"]*)['"]([^>]*)>/gi, (match, preAttrs, url, postAttrs) => {
         const urlClean = url.replace(/&amp;/g, '&').toLowerCase();
         const safeUrl = sanitizeUrl(url.replace(/&amp;/g, '&'));
 
         if (!safeUrl) {
+            // লিঙ্কটি নিরাপদ না হলে, মূল ম্যাচটি ফেরত দেওয়া হচ্ছে
             return match;
         }
 
@@ -193,16 +137,20 @@ async function translateHtmlContentPreserveOriginal(html) {
 
         if (isYesItsMe || isGetCode) {
             let newAttrs = preAttrs + postAttrs;
+            // গুরুত্বপূর্ণ লিঙ্কে লাল ব্যাকগ্রাউন্ড এবং সাদা টেক্সট স্টাইল যোগ করা হচ্ছে
+            const buttonStyle = 'color: #ffffff !important; background-color: #e50914 !important; padding: 5px 10px; border-radius: 4px; display: inline-block; text-decoration: none;';
+
             if (newAttrs.includes('style=')) {
                 newAttrs = newAttrs.replace(/style\s*=\s*["']([^"']*)["']/i, (m, styles) => {
-                    return `style="${styles}; color: #ffffff !important;"`;
+                    return `style="${styles}; ${buttonStyle}"`;
                 });
             } else {
-                newAttrs = newAttrs + ' style="color: #ffffff !important;"';
+                newAttrs = newAttrs + ` style="${buttonStyle}"`;
             }
             return `<a${newAttrs} href="${safeUrl}" target="_blank" rel="noopener noreferrer">`;
         }
 
+        // অন্য লিঙ্কগুলির জন্য শুধু স্যানিটাইজড URL ব্যবহার করা হচ্ছে
         return `<a${preAttrs} href="${safeUrl}"${postAttrs} target="_blank" rel="noopener noreferrer">`;
     });
 
@@ -234,7 +182,7 @@ function getUserFriendlyError(error) {
     return "Something went wrong while searching emails. Please try again.";
 }
 
-// --- মূল পরিবর্তন এই ফাংশনে ---
+// --- মূল ফাংশন: searchNetflixEmails ---
 
 function searchNetflixEmails(imapConfig, userEmail) {
     return new Promise((resolve, reject) => {
@@ -248,13 +196,15 @@ function searchNetflixEmails(imapConfig, userEmail) {
                 }
 
                 const now = new Date();
-                const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
                 
-                // IMAP সার্চ: শুধুমাত্র আজকের বা তার পরের তারিখের Netflix ইমেইলগুলি খুঁজুন
-                // NOTE: IMAP-এর SINCE কমান্ড সাধারণত শুধুমাত্র দিনের উপর ভিত্তি করে ফিল্টার করে। 
+                // এখানে মিনিটের সংখ্যা পরিবর্তন করুন (যেমন: 5 বা 30)
+                const minutesToFilter = 15; 
+                const fifteenMinutesAgo = new Date(now.getTime() - minutesToFilter * 60 * 1000);
+                
+                // IMAP সার্চ: নির্দিষ্ট সময়সীমার মধ্যে Netflix ইমেইলগুলি খুঁজুন
                 const searchCriteria = [
-                    'FROM', 'netflix.com', 
-                    'SINCE', formatImapDate(fifteenMinutesAgo)
+                    ['FROM', 'netflix.com'], 
+                    ['SINCE', formatImapDate(fifteenMinutesAgo)]
                 ];
 
                 imap.search(searchCriteria, (err, results) => {
@@ -268,8 +218,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
                         return resolve([]);
                     }
                     
-                    // ইমেইলগুলি নতুন থেকে পুরানো ক্রমে সাজান এবং ফেচ করুন
-                    // (যদিও SINCE ব্যবহার হচ্ছে, আমরা শেষ 50টা নিচ্ছি নিশ্চিত করার জন্য যে আমরা আজকের সব ইমেইল পাচ্ছি)
                     const latestEmails = results.slice(-50); 
                     
                     if (latestEmails.length === 0) {
@@ -296,7 +244,6 @@ function searchNetflixEmails(imapConfig, userEmail) {
                             });
 
                             msg.once("end", () => {
-                                // ছোট বিলম্ব পার্সিং নিশ্চিত করার জন্য
                                 setTimeout(() => resolveEmail(emailData), 50); 
                             });
                         });
@@ -315,7 +262,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                             const userEmailLower = userEmail.toLowerCase().trim();
 
                             const netflixEmails = emails
-                                .filter((email) => email !== null && email.date) // শুধু বৈধ ইমেইল ও তারিখ থাকলে
+                                .filter((email) => email !== null && email.date) 
                                 .filter((email) => {
                                     const fromAddress = (email.from?.text || "").toLowerCase();
                                     return fromAddress.includes("netflix");
@@ -345,11 +292,11 @@ function searchNetflixEmails(imapConfig, userEmail) {
 
                             let foundEmail = null;
 
-                            // অনুবাদ ছাড়াই দ্রুত লিঙ্ক-ভিত্তিক ফিল্টারিং
+                            // দ্রুত লিঙ্ক-ভিত্তিক ফিল্টারিং
                             for (const email of sortedEmails) {
                                 if (isRelevantNetflixLinkEmail(email.html, email.text)) {
                                     foundEmail = email;
-                                    break; // প্রথম প্রাসঙ্গিক ইমেইলটি পেয়ে গেছি, আর খোঁজার দরকার নেই
+                                    break;
                                 }
                             }
 
@@ -360,26 +307,27 @@ function searchNetflixEmails(imapConfig, userEmail) {
                                 return;
                             }
 
-                            // শুধুমাত্র প্রাপ্ত ইমেইলটির অনুবাদ এবং HTML প্রসেসিং হবে
                             const htmlContent = foundEmail.html || "";
-                            const translatedSubject = await translateToEnglish(foundEmail.subject || "Email");
+                            
+                            // *** অনুবাদ বন্ধ: সরাসরি মূল বিষয়বস্তু ব্যবহার করা হচ্ছে ***
+                            const subject = foundEmail.subject || "Email";
 
-                            let translatedHtml = htmlContent;
+                            let sanitizedHtml = htmlContent;
                             try {
-                                // এই ফাংশনটি HTML কন্টেন্টকে অনুবাদ করে এবং লিঙ্কগুলি স্যানিটাইজ করে
-                                translatedHtml = await translateHtmlContentPreserveOriginal(htmlContent);
+                                // শুধুমাত্র লিঙ্ক স্যানিটাইজেশন এবং স্টাইলিং করা হচ্ছে, কোনো অনুবাদ নয়
+                                sanitizedHtml = await sanitizeAndStyleHtml(htmlContent);
                             } catch (e) {
-                                // অনুবাদ ব্যর্থ হলে মূল HTML কন্টেন্ট ব্যবহার করুন
-                                translatedHtml = htmlContent;
+                                // কোনো ত্রুটি হলে মূল HTML কন্টেন্ট ব্যবহার করা হচ্ছে
+                                sanitizedHtml = htmlContent;
                             }
 
                             const formattedEmail = {
                                 id: foundEmail.messageId || `${Date.now()}-${Math.random()}`,
-                                subject: translatedSubject,
+                                subject: subject, // মূল সাবজেক্ট
                                 receivedAt: foundEmail.date ? foundEmail.date.toISOString() : new Date().toISOString(),
                                 from: foundEmail.from?.text || "",
                                 to: foundEmail.to?.text || "",
-                                rawHtml: translatedHtml,
+                                rawHtml: sanitizedHtml, // স্যানিটাইজড কিন্তু অনুদিত নয় এমন HTML
                             };
 
                             resolve([formattedEmail]);
@@ -430,7 +378,6 @@ export default async function handler(req, res) {
     try {
         const results = await searchNetflixEmails(imapConfig, email);
         if (results && results.length > 0) {
-            // আপনার অনুরোধ অনুযায়ী, আউটপুট ফরম্যাট অপরিবর্তিত রাখা হয়েছে
             res.status(200).json({ emails: results, totalCount: results.length });
         } else {
             res.status(404).json({
@@ -442,4 +389,4 @@ export default async function handler(req, res) {
             error: getUserFriendlyError(error)
         });
     }
-          }
+}
