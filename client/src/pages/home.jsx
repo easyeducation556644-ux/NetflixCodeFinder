@@ -12,23 +12,69 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/hooks/use-language";
 
-// Translation cache
+// Translation cache - global persist
 const translationCache = new Map();
 
-// Google Translate helper
-async function translateText(text, targetLang) {
-  if (!text || text.trim() === "") return text;
-  const lang = targetLang || "en";
-  const cacheKey = `${text}-${lang}`;
-  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+// Google Translate helper with batch support
+async function translateTextBatch(texts, targetLang) {
+  if (!texts || texts.length === 0) return [];
+  
+  // Check cache first
+  const results = [];
+  const toTranslate = [];
+  const indices = [];
+  
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i];
+    const cacheKey = `${text}-${targetLang}`;
+    
+    if (translationCache.has(cacheKey)) {
+      results[i] = translationCache.get(cacheKey);
+    } else {
+      results[i] = null;
+      toTranslate.push(text);
+      indices.push(i);
+    }
+  }
+  
+  // If all cached, return immediately
+  if (toTranslate.length === 0) {
+    return results;
+  }
+  
+  // Translate in batch (max 10 at a time for speed)
+  const batchSize = 10;
+  for (let i = 0; i < toTranslate.length; i += batchSize) {
+    const batch = toTranslate.slice(i, i + batchSize);
+    const batchIndices = indices.slice(i, i + batchSize);
+    
+    // Parallel translation
+    const promises = batch.map(text => translateSingle(text, targetLang));
+    const translated = await Promise.all(promises);
+    
+    // Store results
+    for (let j = 0; j < translated.length; j++) {
+      const originalText = batch[j];
+      const translatedText = translated[j];
+      const cacheKey = `${originalText}-${targetLang}`;
+      
+      translationCache.set(cacheKey, translatedText);
+      results[batchIndices[j]] = translatedText;
+    }
+  }
+  
+  return results;
+}
 
+async function translateSingle(text, targetLang) {
+  if (!text || text.trim() === "") return text;
+  
   try {
     const res = await fetch(
-      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
     );
     const data = await res.json();
     const translated = data[0].map(item => item[0]).join("");
-    translationCache.set(cacheKey, translated);
     return translated;
   } catch (err) {
     console.error("Translation error:", err);
@@ -74,74 +120,87 @@ function EmailContent({ email, emailId, targetLanguage }) {
   const containerRef = useRef(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState(0);
-  const [currentLineIndex, setCurrentLineIndex] = useState(-1);
+  const [hasTranslated, setHasTranslated] = useState(false);
+  const translationKey = useRef(`${emailId}-${targetLanguage}`);
 
   // Initialize: Parse HTML and show original
   useEffect(() => {
     if (!containerRef.current || !email.rawHtml) return;
     containerRef.current.innerHTML = email.rawHtml;
-  }, [email.rawHtml]);
+    setHasTranslated(false);
+    translationKey.current = `${emailId}-${targetLanguage}`;
+  }, [email.rawHtml, emailId]);
 
   // Start translation after showing original
   useEffect(() => {
-    if (!containerRef.current || !email.rawHtml || targetLanguage === 'en') return;
+    // If already translated this email in this language, skip
+    if (hasTranslated) return;
+    
+    // Reset to original HTML when language changes
+    if (containerRef.current && email.rawHtml) {
+      containerRef.current.innerHTML = email.rawHtml;
+    }
+    
+    if (!containerRef.current || !email.rawHtml) return;
 
     let mounted = true;
 
     async function translateLineByLine() {
       setIsTranslating(true);
+      setTranslationProgress(0);
       
       // Extract text nodes from the actual DOM
       const liveNodes = extractTextNodes(containerRef.current);
       
       if (liveNodes.length === 0) {
         setIsTranslating(false);
+        setHasTranslated(true);
         return;
       }
 
+      // Collect all texts for batch translation
+      const allTexts = liveNodes.map(n => n.originalText);
+      
+      // Translate in batch
+      const translatedTexts = await translateTextBatch(allTexts, targetLanguage);
+      
+      // Apply translations one by one with animation
       for (let i = 0; i < liveNodes.length; i++) {
         if (!mounted) break;
         
-        setCurrentLineIndex(i);
         setTranslationProgress(Math.round(((i + 1) / liveNodes.length) * 100));
         
         const nodeInfo = liveNodes[i];
-        const originalText = nodeInfo.originalText;
+        const translatedText = translatedTexts[i];
         
         // Add blinking effect to parent element
         nodeInfo.parent.classList.add('translating-line');
         
-        // Translate the entire line
-        const translatedText = await translateText(originalText, targetLanguage);
-        
         // Update the text node
         nodeInfo.node.nodeValue = translatedText;
         
-        // Wait a bit to show the translation
-        await new Promise(r => setTimeout(r, 200));
+        // Small delay for visual effect
+        await new Promise(r => setTimeout(r, 50));
         
         // Remove blinking effect
         nodeInfo.parent.classList.remove('translating-line');
-        
-        // Small delay before next line
-        await new Promise(r => setTimeout(r, 100));
       }
       
-      setCurrentLineIndex(-1);
       setIsTranslating(false);
       setTranslationProgress(100);
+      setHasTranslated(true);
     }
 
     // Start translation after a small delay
     const timer = setTimeout(() => {
       translateLineByLine();
-    }, 500);
+    }, 300);
 
     return () => {
       mounted = false;
       clearTimeout(timer);
     };
-  }, [email.rawHtml, targetLanguage]);
+  }, [email.rawHtml, targetLanguage, emailId, hasTranslated]);
 
   return (
     <div className="w-full relative" data-testid={`email-content-${emailId}`}>
@@ -152,18 +211,18 @@ function EmailContent({ email, emailId, targetLanguage }) {
             box-shadow: none;
           }
           50% { 
-            background-color: rgba(239, 68, 68, 0.1);
-            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+            background-color: rgba(239, 68, 68, 0.15);
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
             border-radius: 4px;
           }
         }
         
         .translating-line {
-          animation: blink-translate 0.8s ease-in-out infinite;
+          animation: blink-translate 0.6s ease-in-out infinite;
           padding: 2px 4px;
           margin: -2px -4px;
           display: inline-block;
-          transition: all 0.3s ease;
+          transition: all 0.2s ease;
         }
       `}</style>
       
@@ -171,7 +230,7 @@ function EmailContent({ email, emailId, targetLanguage }) {
         <div className="absolute top-2 right-2 bg-neutral-800/95 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2 z-10 shadow-lg border border-neutral-700">
           <Loader2 className="w-3 h-3 animate-spin text-red-500" />
           <span className="text-xs text-neutral-300 font-medium">
-            Translating... {translationProgress}%
+            {translationProgress}%
           </span>
         </div>
       )}
