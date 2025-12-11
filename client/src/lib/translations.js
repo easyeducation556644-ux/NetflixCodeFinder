@@ -3,7 +3,7 @@ const translations = {
   en: {
     title: "CODE GETTER",
     subtitle: "Netflix Household Access & Temporary Codes",
-    findLatestEmail: "Find Latest Email",
+    findLatestEmail: "Find Your Household or Temporary mail",
     enterEmailDescription: "Enter the email to search for the latest Netflix email",
     enterNetflixEmail: "Enter Netflix Email",
     emailPlaceholder: "user@example.com",
@@ -20,7 +20,7 @@ const translations = {
   bn: {
     title: "CODE GETTER",
     subtitle: "Netflix হাউসহোল্ড অ্যাক্সেস ও টেম্পোরারি কোড",
-    findLatestEmail: "সর্বশেষ ইমেইল খুঁজুন",
+    findLatestEmail: "আপনার হাউসহোল্ড বা টেম্পোরারি মেইল খুঁজুন",
     enterEmailDescription: "সর্বশেষ Netflix ইমেইল খুঁজতে ইমেইল লিখুন",
     enterNetflixEmail: "Netflix ইমেইল লিখুন",
     emailPlaceholder: "user@example.com",
@@ -37,7 +37,7 @@ const translations = {
   hi: {
     title: "CODE GETTER",
     subtitle: "Netflix हाउसहोल्ड एक्सेस और टेम्पररी कोड",
-    findLatestEmail: "नवीनतम ईमेल खोजें",
+    findLatestEmail: "अपना हाउसहोल्ड या टेम्पररी मेल खोजें",
     enterEmailDescription: "नवीनतम Netflix ईमेल खोजने के लिए ईमेल दर्ज करें",
     enterNetflixEmail: "Netflix ईमेल दर्ज करें",
     emailPlaceholder: "user@example.com",
@@ -54,7 +54,7 @@ const translations = {
   es: {
     title: "CODE GETTER",
     subtitle: "Acceso Hogar de Netflix y Codigos Temporales",
-    findLatestEmail: "Buscar Ultimo Correo",
+    findLatestEmail: "Encuentra tu correo de Household o Temporal",
     enterEmailDescription: "Ingresa el correo para buscar el ultimo email de Netflix",
     enterNetflixEmail: "Ingresa Correo de Netflix",
     emailPlaceholder: "user@example.com",
@@ -71,7 +71,7 @@ const translations = {
   fr: {
     title: "CODE GETTER",
     subtitle: "Acces Foyer Netflix et Codes Temporaires",
-    findLatestEmail: "Trouver le Dernier Email",
+    findLatestEmail: "Trouvez votre email Household ou Temporaire",
     enterEmailDescription: "Entrez l'email pour rechercher le dernier email Netflix",
     enterNetflixEmail: "Entrez l'Email Netflix",
     emailPlaceholder: "user@example.com",
@@ -88,7 +88,7 @@ const translations = {
   ar: {
     title: "CODE GETTER",
     subtitle: "رموز الوصول المنزلي والمؤقتة لـ Netflix",
-    findLatestEmail: "البحث عن آخر بريد",
+    findLatestEmail: "ابحث عن بريدك المنزلي أو المؤقت",
     enterEmailDescription: "أدخل البريد الإلكتروني للبحث عن آخر بريد Netflix",
     enterNetflixEmail: "أدخل بريد Netflix",
     emailPlaceholder: "user@example.com",
@@ -105,7 +105,7 @@ const translations = {
   pt: {
     title: "CODE GETTER",
     subtitle: "Acesso Residencial Netflix e Codigos Temporarios",
-    findLatestEmail: "Encontrar Ultimo Email",
+    findLatestEmail: "Encontre seu email Household ou Temporário",
     enterEmailDescription: "Digite o email para buscar o ultimo email da Netflix",
     enterNetflixEmail: "Digite o Email Netflix",
     emailPlaceholder: "user@example.com",
@@ -122,7 +122,7 @@ const translations = {
   de: {
     title: "CODE GETTER",
     subtitle: "Netflix Haushaltszugang und Temporare Codes",
-    findLatestEmail: "Neueste E-Mail Finden",
+    findLatestEmail: "Finden Sie Ihre Household- oder temporäre E-Mail",
     enterEmailDescription: "Geben Sie die E-Mail ein um die neueste Netflix E-Mail zu suchen",
     enterNetflixEmail: "Netflix E-Mail Eingeben",
     emailPlaceholder: "user@example.com",
@@ -139,7 +139,7 @@ const translations = {
   ko: {
     title: "CODE GETTER",
     subtitle: "Netflix 가구 액세스 및 임시 코드",
-    findLatestEmail: "최신 이메일 찾기",
+    findLatestEmail: "하우스홀드 또는 임시 이메일을 찾기",
     enterEmailDescription: "최신 Netflix 이메일을 검색하려면 이메일을 입력하세요",
     enterNetflixEmail: "Netflix 이메일 입력",
     emailPlaceholder: "user@example.com",
@@ -156,7 +156,7 @@ const translations = {
   it: {
     title: "CODE GETTER",
     subtitle: "Accesso Domestico Netflix e Codici Temporanei",
-    findLatestEmail: "Trova l'Ultima Email",
+    findLatestEmail: "Trova la tua email Household o Temporanea",
     enterEmailDescription: "Inserisci l'email per cercare l'ultima email Netflix",
     enterNetflixEmail: "Inserisci Email Netflix",
     emailPlaceholder: "user@example.com",
@@ -219,14 +219,14 @@ export async function detectCountry() {
     { url: 'https://api.country.is/', field: 'country' },
     { url: 'https://ipapi.co/json/', field: 'country_code' }
   ];
-
+  
   for (const api of ipApis) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      const response = await fetch(api.url, { 
-        signal: controller.signal 
+      const response = await fetch(api.url, {
+        signal: controller.signal
       });
       clearTimeout(timeoutId);
       
