@@ -146,8 +146,8 @@ async function searchNetflixEmails(imapConfig, userEmail) {
         const now = new Date();
         const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
         
-        // Search last 2 hours to get all emails, then filter by 15 minutes
-        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        // Search last 24 HOURS to ensure we get emails
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         
         // Format date for IMAP search
         const formatDate = (date) => {
@@ -158,73 +158,59 @@ async function searchNetflixEmails(imapConfig, userEmail) {
             return `${day}-${month}-${year}`;
         };
 
-        // Search for Netflix emails - Try multiple search methods
+        console.log(`Searching emails since: ${formatDate(oneDayAgo)}`);
+
+        // Search ALL recent emails (no FROM filter initially)
         let searchResult;
         try {
-            // Method 1: Search with from filter
+            // Simple search: all emails from last 24 hours
             searchResult = await client.search({
-                from: 'netflix.com',
-                since: formatDate(twoHoursAgo)
+                since: formatDate(oneDayAgo)
             });
+            console.log(`✓ Found ${searchResult.length} total emails in last 24 hours`);
         } catch (searchError) {
-            console.error('Search method 1 failed:', searchError);
-            // Method 2: Search all recent emails, filter later
-            try {
-                searchResult = await client.search({
-                    since: formatDate(twoHoursAgo)
-                });
-                console.log('Using fallback search (all emails)');
-            } catch (fallbackError) {
-                console.error('Fallback search also failed:', fallbackError);
-                throw fallbackError;
-            }
+            console.error('❌ Search failed:', searchError);
+            await client.logout();
+            throw searchError;
         }
 
         if (!searchResult || searchResult.length === 0) {
-            console.log('No emails found in search');
+            console.log('❌ No emails found in search at all');
             await client.logout();
             return [];
         }
 
-        console.log(`Found ${searchResult.length} emails in last 2 hours`);
-
-        // Fetch ALL emails (no limit) - reversed to get newest first
+        // Fetch ALL emails (limit to 200 for safety)
         const messages = [];
         
-        // Process in batches of 100 for speed
-        const batchSize = 100;
-        const emailIds = Array.from(searchResult).reverse(); // Newest first
+        const emailIds = Array.from(searchResult).reverse().slice(0, 200); // Last 200 emails, newest first
+        console.log(`Fetching ${emailIds.length} emails...`);
         
-        for (let i = 0; i < emailIds.length; i += batchSize) {
-            const batch = emailIds.slice(i, i + batchSize);
-            
-            for await (let message of client.fetch(batch, { 
-                source: true,
-                envelope: true,
-                internalDate: true
-            })) {
-                try {
-                    const parsed = await simpleParser(message.source);
-                    if (parsed && parsed.date) {
-                        messages.push(parsed);
+        let fetchedCount = 0;
+        for await (let message of client.fetch(emailIds, { 
+            source: true,
+            envelope: true,
+            internalDate: true
+        })) {
+            try {
+                const parsed = await simpleParser(message.source);
+                if (parsed && parsed.date) {
+                    messages.push(parsed);
+                    fetchedCount++;
+                    
+                    // Log every 20 emails
+                    if (fetchedCount % 20 === 0) {
+                        console.log(`Fetched ${fetchedCount}/${emailIds.length} emails...`);
                     }
-                } catch (e) {
-                    console.error('Parse error:', e);
                 }
-            }
-            
-            // Stop if we have enough recent emails
-            if (messages.length > 0) {
-                const oldestProcessed = new Date(messages[messages.length - 1].date);
-                if (oldestProcessed < fifteenMinutesAgo) {
-                    break; // No need to fetch older emails
-                }
+            } catch (e) {
+                console.error('Parse error:', e);
             }
         }
 
         await client.logout();
 
-        console.log(`Parsed ${messages.length} emails`);
+        console.log(`✓ Successfully parsed ${messages.length} emails`);
 
         const userEmailLower = userEmail.toLowerCase().trim();
 
