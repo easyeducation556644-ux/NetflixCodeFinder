@@ -1,54 +1,51 @@
-import Imap from "imap";
-import { simpleParser } from "mailparser";
-// import translatte from "translatte"; // অনুবাদ মডিউলটি আর প্রয়োজন নেই
+import { ImapFlow } from 'imapflow';
+import { simpleParser } from 'mailparser';
 
-// --- নতুন Helper ফাংশন ---
-
-// IMAP সার্চের জন্য তারিখকে 'DD-Mon-YYYY' ফরম্যাটে কনভার্ট করে
-function formatImapDate(date) {
-    const day = date.getDate().toString().padStart(2, '0');
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const month = monthNames[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
-}
-
-// নতুন ফিল্টারিং লজিক: ইমেইলের কন্টেন্টে নির্দিষ্ট লিঙ্ক প্রিফিক্স আছে কিনা তা চেক করে
+// Check if email contains relevant Netflix links - RELAXED VERSION
 function isRelevantNetflixLinkEmail(htmlContent, textContent) {
     if (!htmlContent && !textContent) return false;
 
-    // শুধুমাত্র এই ফিক্সড প্রিফিক্সগুলি চেক করব
+    // Primary verification links
     const linkPrefix1 = 'https://www.netflix.com/account/travel/verify';
     const linkPrefix2 = 'https://www.netflix.com/account/update-primary-location';
-
-    // HTML এবং Text কন্টেন্ট একসাথে করে নিচ্ছি
+    
+    // Additional patterns to catch
+    const patterns = [
+        'netflix.com/account/travel',
+        'netflix.com/account/update',
+        'travel/verify',
+        'update-primary-location',
+        'temporary-access',
+        'verify-device',
+        'yesitwasme',
+        'yes-it-was-me'
+    ];
+    
     const content = (htmlContent || '') + (textContent || '');
+    const contentLower = content.toLowerCase();
 
-    const includesLink1 = content.includes(linkPrefix1);
-    const includesLink2 = content.includes(linkPrefix2);
-
-    // যেকোনো একটি লিঙ্ক থাকলেই ইমেইলটি প্রাসঙ্গিক
-    return includesLink1 || includesLink2;
-}
-
-// --- আপনার বিদ্যমান Helper ফাংশন ---
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    // Check exact links first
+    if (content.includes(linkPrefix1) || content.includes(linkPrefix2)) {
+        return true;
+    }
+    
+    // Check for any verification patterns
+    for (const pattern of patterns) {
+        if (contentLower.includes(pattern.toLowerCase())) {
+            console.log(`✓ Found pattern: ${pattern}`);
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 function sanitizeUrl(url) {
     if (!url || typeof url !== 'string') return null;
 
     const trimmedUrl = url.trim();
-
     let urlObj;
+    
     try {
         urlObj = new URL(trimmedUrl);
     } catch (e) {
@@ -68,14 +65,8 @@ function sanitizeUrl(url) {
     }
 
     const dangerousPatterns = [
-        'javascript:',
-        'data:',
-        'vbscript:',
-        '<script',
-        'onerror',
-        'onclick',
-        'onload',
-        'onmouseover',
+        'javascript:', 'data:', 'vbscript:', '<script',
+        'onerror', 'onclick', 'onload', 'onmouseover',
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -86,58 +77,35 @@ function sanitizeUrl(url) {
 
     const hostname = urlObj.hostname.toLowerCase();
     const allowedDomains = [
-        'netflix.com',
-        'www.netflix.com',
-        'nflxso.net',
-        'www.nflxso.net',
-        'email.netflix.com',
-        'click.netflix.com',
+        'netflix.com', 'www.netflix.com', 'nflxso.net',
+        'www.nflxso.net', 'email.netflix.com', 'click.netflix.com',
     ];
 
     const isAllowed = allowedDomains.some(domain => {
         return hostname === domain || hostname.endsWith('.' + domain);
     });
 
-    if (!isAllowed) {
-        return null;
-    }
-
+    if (!isAllowed) return null;
     return trimmedUrl;
 }
 
-// অনুবাদের প্রয়োজন নেই, তাই এই ফাংশনটি এখন শুধু মূল টেক্সটটি ফেরত দেবে।
-async function translateToEnglish(text) {
-    return text;
-}
-
-// এই ফাংশনটি এখন শুধু লিঙ্কগুলি স্যানিটাইজ করবে এবং গুরুত্বপূর্ণ বাটনগুলিতে স্টাইল যোগ করবে, কোনো অনুবাদ করবে না।
 async function sanitizeAndStyleHtml(html) {
     if (!html || html.trim() === "") return html;
 
-    let processedHtml = html
-        // নিরাপত্তার জন্য script ট্যাগগুলি সরিয়ে দেওয়া হলো
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    let processedHtml = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
 
-    // লিঙ্ক স্যানিটাইজেশন এবং স্টাইলিং:
-    // Netflix-এর 'Yes it was me' বা 'Get Code' লিঙ্কে স্টাইল যোগ করা হচ্ছে
     processedHtml = processedHtml.replace(/<a([^>]*)href\s*=\s*['"]([^'"]*)['"]([^>]*)>/gi, (match, preAttrs, url, postAttrs) => {
         const urlClean = url.replace(/&amp;/g, '&').toLowerCase();
         const safeUrl = sanitizeUrl(url.replace(/&amp;/g, '&'));
 
-        if (!safeUrl) {
-            // লিঙ্কটি নিরাপদ না হলে, মূল ম্যাচটি ফেরত দেওয়া হচ্ছে
-            return match;
-        }
+        if (!safeUrl) return match;
 
         const isYesItsMe = urlClean.includes('yesitwasme') ||
-            urlClean.includes('yes-it-was-me') ||
-            urlClean.includes('yes_it_was_me');
-
+            urlClean.includes('yes-it-was-me') || urlClean.includes('yes_it_was_me');
         const isGetCode = urlClean.includes('travel') && urlClean.includes('temporary');
 
         if (isYesItsMe || isGetCode) {
             let newAttrs = preAttrs + postAttrs;
-            // গুরুত্বপূর্ণ লিঙ্কে লাল ব্যাকগ্রাউন্ড এবং সাদা টেক্সট স্টাইল যোগ করা হচ্ছে
             const buttonStyle = 'color: #ffffff !important; background-color: #e50914 !important; padding: 5px 10px; border-radius: 4px; display: inline-block; text-decoration: none;';
 
             if (newAttrs.includes('style=')) {
@@ -150,21 +118,17 @@ async function sanitizeAndStyleHtml(html) {
             return `<a${newAttrs} href="${safeUrl}" target="_blank" rel="noopener noreferrer">`;
         }
 
-        // অন্য লিঙ্কগুলির জন্য শুধু স্যানিটাইজড URL ব্যবহার করা হচ্ছে
         return `<a${preAttrs} href="${safeUrl}"${postAttrs} target="_blank" rel="noopener noreferrer">`;
     });
 
-    const wrappedHtml = `<div class="netflix-email-original">${processedHtml}</div>`;
-
-    return wrappedHtml;
+    return `<div class="netflix-email-original">${processedHtml}</div>`;
 }
-
 
 function getUserFriendlyError(error) {
     const errorMessage = error.message || error.toString();
 
     if (errorMessage.includes("AUTHENTICATIONFAILED") || errorMessage.includes("Invalid credentials")) {
-        return "Email login failed. The email or password may be incorrect.";
+        return "Email login failed. The email or app password may be incorrect.";
     }
     if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("getaddrinfo")) {
         return "Could not connect to email server. Please check your internet connection.";
@@ -175,187 +139,191 @@ function getUserFriendlyError(error) {
     if (errorMessage.includes("ECONNREFUSED")) {
         return "Connection refused by email server. Please try again later.";
     }
-    if (errorMessage.includes("certificate")) {
-        return "Security certificate error. Please contact support.";
-    }
 
     return "Something went wrong while searching emails. Please try again.";
 }
 
-// --- মূল ফাংশন: searchNetflixEmails ---
-
-function searchNetflixEmails(imapConfig, userEmail) {
-    return new Promise((resolve, reject) => {
-        const imap = new Imap(imapConfig);
-
-        imap.once("ready", () => {
-            imap.openBox("INBOX", true, (err, box) => {
-                if (err) {
-                    imap.end();
-                    return reject(err);
-                }
-
-                const now = new Date();
-                
-                // এখানে মিনিটের সংখ্যা পরিবর্তন করুন (যেমন: 5 বা 30)
-                const minutesToFilter = 15; 
-                const fifteenMinutesAgo = new Date(now.getTime() - minutesToFilter * 60 * 1000);
-                
-                // IMAP সার্চ: নির্দিষ্ট সময়সীমার মধ্যে Netflix ইমেইলগুলি খুঁজুন
-                const searchCriteria = [
-                    ['FROM', 'netflix.com'], 
-                    ['SINCE', formatImapDate(fifteenMinutesAgo)]
-                ];
-
-                imap.search(searchCriteria, (err, results) => {
-                    if (err) {
-                        imap.end();
-                        return reject(err);
-                    }
-
-                    if (!results || results.length === 0) {
-                        imap.end();
-                        return resolve([]);
-                    }
-                    
-                    const latestEmails = results.slice(-50); 
-                    
-                    if (latestEmails.length === 0) {
-                        imap.end();
-                        return resolve([]);
-                    }
-
-
-                    const fetch = imap.fetch(latestEmails, { bodies: "", struct: true });
-                    const emailPromises = [];
-
-                    fetch.on("message", (msg, seqno) => {
-                        const emailPromise = new Promise((resolveEmail) => {
-                            let emailData = null;
-
-                            msg.on("body", (stream, info) => {
-                                simpleParser(stream, (err, parsed) => {
-                                    if (err) {
-                                        resolveEmail(null);
-                                        return;
-                                    }
-                                    emailData = parsed;
-                                });
-                            });
-
-                            msg.once("end", () => {
-                                setTimeout(() => resolveEmail(emailData), 50); 
-                            });
-                        });
-                        emailPromises.push(emailPromise);
-                    });
-
-                    fetch.once("error", (err) => {
-                        imap.end();
-                        reject(err);
-                    });
-
-                    fetch.once("end", async () => {
-                        try {
-                            const emails = await Promise.all(emailPromises);
-
-                            const userEmailLower = userEmail.toLowerCase().trim();
-
-                            const netflixEmails = emails
-                                .filter((email) => email !== null && email.date) 
-                                .filter((email) => {
-                                    const fromAddress = (email.from?.text || "").toLowerCase();
-                                    return fromAddress.includes("netflix");
-                                })
-                                .filter((email) => {
-                                    const toAddresses = (email.to?.text || "").toLowerCase();
-                                    const ccAddresses = (email.cc?.text || "").toLowerCase();
-                                    const htmlContent = (email.html || "").toLowerCase();
-                                    
-                                    // ব্যবহারকারীকে অ্যাড্রেস করা হয়েছে কিনা তা নিশ্চিত করুন
-                                    return (
-                                        toAddresses.includes(userEmailLower) ||
-                                        ccAddresses.includes(userEmailLower) ||
-                                        htmlContent.includes(userEmailLower)
-                                    );
-                                });
-
-                            // Node.js এ মিনিট-লেভেলে ফিল্টার করুন
-                            const timeFilteredEmails = netflixEmails
-                                .filter((email) => {
-                                    const emailDate = new Date(email.date);
-                                    return emailDate >= fifteenMinutesAgo;
-                                });
-
-                            // প্রাপ্ত ইমেইলগুলিকে নতুন থেকে পুরানো ক্রমে সাজান
-                            const sortedEmails = timeFilteredEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                            let foundEmail = null;
-
-                            // দ্রুত লিঙ্ক-ভিত্তিক ফিল্টারিং
-                            for (const email of sortedEmails) {
-                                if (isRelevantNetflixLinkEmail(email.html, email.text)) {
-                                    foundEmail = email;
-                                    break;
-                                }
-                            }
-
-                            imap.end();
-
-                            if (!foundEmail) {
-                                resolve([]);
-                                return;
-                            }
-
-                            const htmlContent = foundEmail.html || "";
-                            
-                            // *** অনুবাদ বন্ধ: সরাসরি মূল বিষয়বস্তু ব্যবহার করা হচ্ছে ***
-                            const subject = foundEmail.subject || "Email";
-
-                            let sanitizedHtml = htmlContent;
-                            try {
-                                // শুধুমাত্র লিঙ্ক স্যানিটাইজেশন এবং স্টাইলিং করা হচ্ছে, কোনো অনুবাদ নয়
-                                sanitizedHtml = await sanitizeAndStyleHtml(htmlContent);
-                            } catch (e) {
-                                // কোনো ত্রুটি হলে মূল HTML কন্টেন্ট ব্যবহার করা হচ্ছে
-                                sanitizedHtml = htmlContent;
-                            }
-
-                            const formattedEmail = {
-                                id: foundEmail.messageId || `${Date.now()}-${Math.random()}`,
-                                subject: subject, // মূল সাবজেক্ট
-                                receivedAt: foundEmail.date ? foundEmail.date.toISOString() : new Date().toISOString(),
-                                from: foundEmail.from?.text || "",
-                                to: foundEmail.to?.text || "",
-                                rawHtml: sanitizedHtml, // স্যানিটাইজড কিন্তু অনুদিত নয় এমন HTML
-                            };
-
-                            resolve([formattedEmail]);
-                        } catch (parseError) {
-                            imap.end();
-                            reject(parseError);
-                        }
-                    });
-                });
-            });
-        });
-
-        imap.once("error", (err) => {
-            reject(err);
-        });
-
-        imap.connect();
+// SUPER FAST VERSION - Using ImapFlow (Modern IMAP Client)
+async function searchNetflixEmails(imapConfig, userEmail) {
+    const client = new ImapFlow({
+        host: imapConfig.host,
+        port: imapConfig.port,
+        secure: true,
+        auth: {
+            user: imapConfig.user,
+            pass: imapConfig.password
+        },
+        logger: false,
+        tls: {
+            rejectUnauthorized: false
+        }
     });
+
+    try {
+        // Connect with 10 second timeout
+        await Promise.race([
+            client.connect(),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('ETIMEDOUT: Connection timeout')), 10000)
+            )
+        ]);
+
+        // Open inbox
+        await client.mailboxOpen('INBOX');
+
+        const now = new Date();
+        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+        
+        console.log(`Current time (UTC): ${now.toISOString()}`);
+        console.log(`15 minutes ago: ${fifteenMinutesAgo.toISOString()}`);
+        
+        // Format date for IMAP search (SINCE only supports date, not time)
+        // So we'll search from today and filter by exact time
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        
+        const formatDate = (date) => {
+            const day = date.getDate();
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const month = monthNames[date.getMonth()];
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`;
+        };
+
+        console.log(`Searching emails from today: ${formatDate(today)}`);
+
+        // Search: Netflix emails TO this user from TODAY
+        let searchResult;
+        try {
+            searchResult = await client.search({
+                to: userEmail,  // Direct TO filter
+                from: 'netflix.com',  // Direct FROM filter
+                since: formatDate(today)  // Today's emails only
+            });
+            console.log(`✓ Found ${searchResult.length} Netflix emails TO ${userEmail} today`);
+        } catch (searchError) {
+            console.error('❌ Search failed:', searchError);
+            await client.logout();
+            throw searchError;
+        }
+
+        if (!searchResult || searchResult.length === 0) {
+            console.log('❌ No emails found in search');
+            await client.logout();
+            return [];
+        }
+
+        // Fetch only the found emails (should be very few now)
+        const messages = [];
+        
+        const emailIds = Array.from(searchResult).reverse(); // Newest first
+        console.log(`Fetching ${emailIds.length} emails...`);
+        
+        let fetchedCount = 0;
+        for await (let message of client.fetch(emailIds, { 
+            source: true,
+            envelope: true,
+            internalDate: true
+        })) {
+            try {
+                const parsed = await simpleParser(message.source);
+                if (parsed && parsed.date) {
+                    messages.push(parsed);
+                    fetchedCount++;
+                }
+            } catch (e) {
+                console.error('Parse error:', e);
+            }
+        }
+
+        await client.logout();
+
+        console.log(`✓ Successfully parsed ${messages.length} emails`);
+
+        const userEmailLower = userEmail.toLowerCase().trim();
+
+        // All emails are already Netflix TO this user, just verify
+        const netflixEmails = messages.filter(email => {
+            const fromText = (email.from?.text || '').toLowerCase();
+            const isFromNetflix = fromText.includes('netflix');
+            
+            if (!isFromNetflix) {
+                console.log(`Skipping non-Netflix: ${email.from?.text}`);
+                return false;
+            }
+            
+            console.log(`✓ Netflix email: ${email.subject} (${email.date})`);
+            return true;
+        });
+
+        console.log(`${netflixEmails.length} verified Netflix emails`);
+
+        // Filter by EXACT 15 minutes
+        const recentEmails = netflixEmails.filter(email => {
+            const emailDate = new Date(email.date);
+            const isRecent = emailDate >= fifteenMinutesAgo;
+            
+            console.log(`Email: "${email.subject}" | Date: ${emailDate.toISOString()} | Recent: ${isRecent}`);
+            
+            return isRecent;
+        });
+
+        console.log(`${recentEmails.length} emails in last 15 minutes`);
+
+        // Sort newest first (already should be, but ensure)
+        recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Find LATEST relevant email
+        const relevantEmail = recentEmails.find(email => {
+            const hasRelevantLink = isRelevantNetflixLinkEmail(email.html, email.text);
+            if (hasRelevantLink) {
+                console.log(`✓ Found relevant link in: ${email.subject}`);
+            } else {
+                console.log(`✗ No relevant link in: ${email.subject}`);
+            }
+            return hasRelevantLink;
+        });
+
+        if (!relevantEmail) {
+            console.log('❌ No email with relevant Netflix links found');
+            console.log('Recent emails subjects:', recentEmails.map(e => e.subject));
+            return [];
+        }
+
+        console.log(`Found relevant email: ${relevantEmail.subject}`);
+
+        // Format email
+        const sanitizedHtml = await sanitizeAndStyleHtml(relevantEmail.html || '');
+
+        const formatted = {
+            id: relevantEmail.messageId || `${Date.now()}-${Math.random()}`,
+            subject: relevantEmail.subject || "Email",
+            receivedAt: relevantEmail.date ? relevantEmail.date.toISOString() : new Date().toISOString(),
+            from: relevantEmail.from?.text || "",
+            to: relevantEmail.to?.text || "",
+            rawHtml: sanitizedHtml,
+        };
+
+        return [formatted];
+
+    } catch (error) {
+        console.error('IMAP Error:', error);
+        try {
+            await client.logout();
+        } catch (e) {
+            // Ignore
+        }
+        throw error;
+    }
 }
 
-// --- আপনার মূল হ্যান্ডলার ফাংশন (পরিবর্তন করা হয়নি) ---
+// HANDLER
 export default async function handler(req, res) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
 
     const { email } = req.body;
-
     if (!email) {
         return res.status(400).json({ error: "Please enter an email address to search." });
     }
@@ -365,28 +333,41 @@ export default async function handler(req, res) {
         password: process.env.EMAIL_PASSWORD,
         host: process.env.EMAIL_SERVER || "imap.gmail.com",
         port: parseInt(process.env.EMAIL_PORT || "993", 10),
-        tls: process.env.EMAIL_TLS !== "false",
-        tlsOptions: { rejectUnauthorized: false },
     };
 
     if (!imapConfig.user || !imapConfig.password) {
         return res.status(500).json({
-            error: "Email service is not configured. Please contact the administrator."
+            error: "Email service is not configured."
         });
     }
 
+    console.log(`Searching emails for: ${email}`);
+    const startTime = Date.now();
+
     try {
         const results = await searchNetflixEmails(imapConfig, email);
+        const duration = Date.now() - startTime;
+        
+        console.log(`Search completed in ${duration}ms`);
+        console.log(`Results:`, results ? results.length : 0, 'emails');
+        
         if (results && results.length > 0) {
-            res.status(200).json({ emails: results, totalCount: results.length });
+            console.log('Sending response with email data');
+            return res.status(200).json({ 
+                emails: results, 
+                totalCount: results.length 
+            });
         } else {
-            res.status(404).json({
+            console.log('No emails found - sending 404');
+            return res.status(404).json({
                 error: "No Netflix email found for this address in the last 15 minutes."
             });
         }
     } catch (error) {
-        res.status(500).json({
-            error: getUserFriendlyError(error)
+        const duration = Date.now() - startTime;
+        console.error(`Error after ${duration}ms:`, error);
+        return res.status(500).json({ 
+            error: getUserFriendlyError(error) 
         });
     }
 }
