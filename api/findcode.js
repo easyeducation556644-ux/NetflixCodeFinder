@@ -1,14 +1,5 @@
-import Imap from "imap";
-import { simpleParser } from "mailparser";
-
-// IMAP date format converter
-function formatImapDate(date) {
-    const day = date.getDate().toString().padStart(2, '0');
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const month = monthNames[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
-}
+import { ImapFlow } from 'imapflow';
+import { simpleParser } from 'mailparser';
 
 // Check if email contains relevant Netflix links
 function isRelevantNetflixLinkEmail(htmlContent, textContent) {
@@ -19,16 +10,6 @@ function isRelevantNetflixLinkEmail(htmlContent, textContent) {
     const content = (htmlContent || '') + (textContent || '');
 
     return content.includes(linkPrefix1) || content.includes(linkPrefix2);
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 function sanitizeUrl(url) {
@@ -119,7 +100,7 @@ function getUserFriendlyError(error) {
     const errorMessage = error.message || error.toString();
 
     if (errorMessage.includes("AUTHENTICATIONFAILED") || errorMessage.includes("Invalid credentials")) {
-        return "Email login failed. The email or password may be incorrect.";
+        return "Email login failed. The email or app password may be incorrect.";
     }
     if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("getaddrinfo")) {
         return "Could not connect to email server. Please check your internet connection.";
@@ -130,207 +111,172 @@ function getUserFriendlyError(error) {
     if (errorMessage.includes("ECONNREFUSED")) {
         return "Connection refused by email server. Please try again later.";
     }
-    if (errorMessage.includes("certificate")) {
-        return "Security certificate error. Please contact support.";
-    }
 
     return "Something went wrong while searching emails. Please try again.";
 }
 
-// MAIN FUNCTION - FIXED VERSION
-function searchNetflixEmails(imapConfig, userEmail) {
-    return new Promise((resolve, reject) => {
-        const imap = new Imap({
-            ...imapConfig,
-            connTimeout: 10000,  // 10 second connection timeout
-            authTimeout: 5000,   // 5 second auth timeout
-            keepalive: false     // Disable keepalive for serverless
-        });
-
-        let connectionClosed = false;
-        const timeoutId = setTimeout(() => {
-            if (!connectionClosed) {
-                connectionClosed = true;
-                imap.end();
-                reject(new Error("ETIMEDOUT: Email fetch timeout after 8 seconds"));
-            }
-        }, 8000); // 8 second max execution time
-
-        const cleanupAndResolve = (result) => {
-            if (!connectionClosed) {
-                connectionClosed = true;
-                clearTimeout(timeoutId);
-                imap.end();
-                resolve(result);
-            }
-        };
-
-        const cleanupAndReject = (error) => {
-            if (!connectionClosed) {
-                connectionClosed = true;
-                clearTimeout(timeoutId);
-                imap.end();
-                reject(error);
-            }
-        };
-
-        imap.once("ready", () => {
-            imap.openBox("INBOX", true, (err, box) => {
-                if (err) return cleanupAndReject(err);
-
-                const now = new Date();
-                const minutesToFilter = 15;
-                const targetTime = new Date(now.getTime() - minutesToFilter * 60 * 1000);
-                
-                // Search emails from last 1 day to get more results
-                const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                
-                const searchCriteria = [
-                    ['FROM', 'netflix.com'],
-                    ['SINCE', formatImapDate(oneDayAgo)]  // Search last 24 hours
-                ];
-
-                imap.search(searchCriteria, (err, results) => {
-                    if (err) return cleanupAndReject(err);
-                    if (!results || results.length === 0) return cleanupAndResolve([]);
-
-                    // Fetch ALL emails found (not just last 50)
-                    const fetch = imap.fetch(results, { 
-                        bodies: "",
-                        struct: true,
-                        markSeen: false
-                    });
-                    
-                    const emailPromises = [];
-
-                    fetch.on("message", (msg, seqno) => {
-                        const emailPromise = new Promise((resolveEmail) => {
-                            let emailData = null;
-
-                            msg.on("body", (stream, info) => {
-                                simpleParser(stream, (err, parsed) => {
-                                    if (err) {
-                                        resolveEmail(null);
-                                        return;
-                                    }
-                                    emailData = parsed;
-                                });
-                            });
-
-                            msg.once("end", () => {
-                                resolveEmail(emailData);
-                            });
-                        });
-                        emailPromises.push(emailPromise);
-                    });
-
-                    fetch.once("error", (err) => {
-                        cleanupAndReject(err);
-                    });
-
-                    fetch.once("end", async () => {
-                        try {
-                            const emails = await Promise.all(emailPromises);
-                            const userEmailLower = userEmail.toLowerCase().trim();
-
-                            // Filter Netflix emails for this user
-                            const netflixEmails = emails
-                                .filter((email) => email !== null && email.date)
-                                .filter((email) => {
-                                    const fromAddress = (email.from?.text || "").toLowerCase();
-                                    return fromAddress.includes("netflix");
-                                })
-                                .filter((email) => {
-                                    const toAddresses = (email.to?.text || "").toLowerCase();
-                                    const ccAddresses = (email.cc?.text || "").toLowerCase();
-                                    const htmlContent = (email.html || "").toLowerCase();
-                                    
-                                    return (
-                                        toAddresses.includes(userEmailLower) ||
-                                        ccAddresses.includes(userEmailLower) ||
-                                        htmlContent.includes(userEmailLower)
-                                    );
-                                });
-
-                            // Filter by EXACT time: last 15 minutes
-                            const timeFilteredEmails = netflixEmails.filter((email) => {
-                                const emailDate = new Date(email.date);
-                                return emailDate >= targetTime;
-                            });
-
-                            // Sort newest first
-                            const sortedEmails = timeFilteredEmails.sort(
-                                (a, b) => new Date(b.date) - new Date(a.date)
-                            );
-
-                            // Find the LATEST email with relevant Netflix links
-                            let foundEmail = null;
-                            for (const email of sortedEmails) {
-                                if (isRelevantNetflixLinkEmail(email.html, email.text)) {
-                                    foundEmail = email;
-                                    break; // Get the latest one only
-                                }
-                            }
-
-                            if (!foundEmail) {
-                                return cleanupAndResolve([]);
-                            }
-
-                            const htmlContent = foundEmail.html || "";
-                            const subject = foundEmail.subject || "Email";
-
-                            let sanitizedHtml = htmlContent;
-                            try {
-                                sanitizedHtml = await sanitizeAndStyleHtml(htmlContent);
-                            } catch (e) {
-                                sanitizedHtml = htmlContent;
-                            }
-
-                            const formattedEmail = {
-                                id: foundEmail.messageId || `${Date.now()}-${Math.random()}`,
-                                subject: subject,
-                                receivedAt: foundEmail.date ? foundEmail.date.toISOString() : new Date().toISOString(),
-                                from: foundEmail.from?.text || "",
-                                to: foundEmail.to?.text || "",
-                                rawHtml: sanitizedHtml,
-                            };
-
-                            cleanupAndResolve([formattedEmail]);
-                        } catch (parseError) {
-                            cleanupAndReject(parseError);
-                        }
-                    });
-                });
-            });
-        });
-
-        imap.once("error", (err) => {
-            cleanupAndReject(err);
-        });
-
-        imap.once("end", () => {
-            if (!connectionClosed) {
-                connectionClosed = true;
-                clearTimeout(timeoutId);
-            }
-        });
-
-        try {
-            imap.connect();
-        } catch (error) {
-            cleanupAndReject(error);
+// SUPER FAST VERSION - Using ImapFlow (Modern IMAP Client)
+async function searchNetflixEmails(imapConfig, userEmail) {
+    const client = new ImapFlow({
+        host: imapConfig.host,
+        port: imapConfig.port,
+        secure: true,
+        auth: {
+            user: imapConfig.user,
+            pass: imapConfig.password
+        },
+        logger: false,
+        tls: {
+            rejectUnauthorized: false
         }
     });
+
+    try {
+        // Connect with 10 second timeout
+        await Promise.race([
+            client.connect(),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('ETIMEDOUT: Connection timeout')), 10000)
+            )
+        ]);
+
+        // Open inbox
+        await client.mailboxOpen('INBOX');
+
+        const now = new Date();
+        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+        
+        // Search last 2 hours to get all emails, then filter by 15 minutes
+        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        
+        // Format date for IMAP search
+        const formatDate = (date) => {
+            const day = date.getDate();
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const month = monthNames[date.getMonth()];
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`;
+        };
+
+        // Search for Netflix emails
+        const searchResult = await client.search({
+            from: 'netflix.com',
+            since: formatDate(twoHoursAgo)
+        });
+
+        if (!searchResult || searchResult.length === 0) {
+            await client.logout();
+            return [];
+        }
+
+        console.log(`Found ${searchResult.length} Netflix emails in last 2 hours`);
+
+        // Fetch ALL emails (no limit) - reversed to get newest first
+        const messages = [];
+        
+        // Process in batches of 100 for speed
+        const batchSize = 100;
+        const emailIds = Array.from(searchResult).reverse(); // Newest first
+        
+        for (let i = 0; i < emailIds.length; i += batchSize) {
+            const batch = emailIds.slice(i, i + batchSize);
+            
+            for await (let message of client.fetch(batch, { 
+                source: true,
+                envelope: true,
+                internalDate: true
+            })) {
+                try {
+                    const parsed = await simpleParser(message.source);
+                    if (parsed && parsed.date) {
+                        messages.push(parsed);
+                    }
+                } catch (e) {
+                    console.error('Parse error:', e);
+                }
+            }
+            
+            // Stop if we have enough recent emails
+            if (messages.length > 0) {
+                const oldestProcessed = new Date(messages[messages.length - 1].date);
+                if (oldestProcessed < fifteenMinutesAgo) {
+                    break; // No need to fetch older emails
+                }
+            }
+        }
+
+        await client.logout();
+
+        console.log(`Parsed ${messages.length} emails`);
+
+        const userEmailLower = userEmail.toLowerCase().trim();
+
+        // Filter for user's emails
+        const userEmails = messages.filter(email => {
+            const toText = (email.to?.text || '').toLowerCase();
+            const ccText = (email.cc?.text || '').toLowerCase();
+            const htmlText = (email.html || '').toLowerCase();
+            
+            return toText.includes(userEmailLower) || 
+                   ccText.includes(userEmailLower) ||
+                   htmlText.includes(userEmailLower);
+        });
+
+        console.log(`${userEmails.length} emails for user ${userEmail}`);
+
+        // Filter by EXACT 15 minutes
+        const recentEmails = userEmails.filter(email => {
+            return new Date(email.date) >= fifteenMinutesAgo;
+        });
+
+        console.log(`${recentEmails.length} emails in last 15 minutes`);
+
+        // Sort newest first (already should be, but ensure)
+        recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Find LATEST relevant email
+        const relevantEmail = recentEmails.find(email => 
+            isRelevantNetflixLinkEmail(email.html, email.text)
+        );
+
+        if (!relevantEmail) {
+            return [];
+        }
+
+        console.log(`Found relevant email: ${relevantEmail.subject}`);
+
+        // Format email
+        const sanitizedHtml = await sanitizeAndStyleHtml(relevantEmail.html || '');
+
+        const formatted = {
+            id: relevantEmail.messageId || `${Date.now()}-${Math.random()}`,
+            subject: relevantEmail.subject || "Email",
+            receivedAt: relevantEmail.date ? relevantEmail.date.toISOString() : new Date().toISOString(),
+            from: relevantEmail.from?.text || "",
+            to: relevantEmail.to?.text || "",
+            rawHtml: sanitizedHtml,
+        };
+
+        return [formatted];
+
+    } catch (error) {
+        console.error('IMAP Error:', error);
+        try {
+            await client.logout();
+        } catch (e) {
+            // Ignore
+        }
+        throw error;
+    }
 }
 
-// HANDLER FUNCTION
+// HANDLER
 export default async function handler(req, res) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
 
     const { email } = req.body;
-
     if (!email) {
         return res.status(400).json({ error: "Please enter an email address to search." });
     }
@@ -340,29 +286,38 @@ export default async function handler(req, res) {
         password: process.env.EMAIL_PASSWORD,
         host: process.env.EMAIL_SERVER || "imap.gmail.com",
         port: parseInt(process.env.EMAIL_PORT || "993", 10),
-        tls: process.env.EMAIL_TLS !== "false",
-        tlsOptions: { rejectUnauthorized: false },
     };
 
     if (!imapConfig.user || !imapConfig.password) {
         return res.status(500).json({
-            error: "Email service is not configured. Please contact the administrator."
+            error: "Email service is not configured."
         });
     }
 
+    console.log(`Searching emails for: ${email}`);
+    const startTime = Date.now();
+
     try {
         const results = await searchNetflixEmails(imapConfig, email);
+        const duration = Date.now() - startTime;
+        
+        console.log(`Search completed in ${duration}ms`);
+        
         if (results && results.length > 0) {
-            res.status(200).json({ emails: results, totalCount: results.length });
+            res.status(200).json({ 
+                emails: results, 
+                totalCount: results.length 
+            });
         } else {
             res.status(404).json({
                 error: "No Netflix email found for this address in the last 15 minutes."
             });
         }
     } catch (error) {
-        console.error("Email fetch error:", error);
-        res.status(500).json({
-            error: getUserFriendlyError(error)
+        const duration = Date.now() - startTime;
+        console.error(`Error after ${duration}ms:`, error);
+        res.status(500).json({ 
+            error: getUserFriendlyError(error) 
         });
     }
 }
