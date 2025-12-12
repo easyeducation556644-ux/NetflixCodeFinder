@@ -158,18 +158,35 @@ async function searchNetflixEmails(imapConfig, userEmail) {
             return `${day}-${month}-${year}`;
         };
 
-        // Search for Netflix emails
-        const searchResult = await client.search({
-            from: 'netflix.com',
-            since: formatDate(twoHoursAgo)
-        });
+        // Search for Netflix emails - Try multiple search methods
+        let searchResult;
+        try {
+            // Method 1: Search with from filter
+            searchResult = await client.search({
+                from: 'netflix.com',
+                since: formatDate(twoHoursAgo)
+            });
+        } catch (searchError) {
+            console.error('Search method 1 failed:', searchError);
+            // Method 2: Search all recent emails, filter later
+            try {
+                searchResult = await client.search({
+                    since: formatDate(twoHoursAgo)
+                });
+                console.log('Using fallback search (all emails)');
+            } catch (fallbackError) {
+                console.error('Fallback search also failed:', fallbackError);
+                throw fallbackError;
+            }
+        }
 
         if (!searchResult || searchResult.length === 0) {
+            console.log('No emails found in search');
             await client.logout();
             return [];
         }
 
-        console.log(`Found ${searchResult.length} Netflix emails in last 2 hours`);
+        console.log(`Found ${searchResult.length} emails in last 2 hours`);
 
         // Fetch ALL emails (no limit) - reversed to get newest first
         const messages = [];
@@ -211,18 +228,33 @@ async function searchNetflixEmails(imapConfig, userEmail) {
 
         const userEmailLower = userEmail.toLowerCase().trim();
 
-        // Filter for user's emails
+        // Filter for user's emails AND Netflix emails
         const userEmails = messages.filter(email => {
+            // First check if from Netflix
+            const fromText = (email.from?.text || '').toLowerCase();
+            const isFromNetflix = fromText.includes('netflix');
+            
+            if (!isFromNetflix) {
+                return false;
+            }
+            
+            // Then check if for this user
             const toText = (email.to?.text || '').toLowerCase();
             const ccText = (email.cc?.text || '').toLowerCase();
             const htmlText = (email.html || '').toLowerCase();
             
-            return toText.includes(userEmailLower) || 
+            const isForUser = toText.includes(userEmailLower) || 
                    ccText.includes(userEmailLower) ||
                    htmlText.includes(userEmailLower);
+            
+            if (isForUser) {
+                console.log(`✓ Email for user: ${email.subject} (${email.date})`);
+            }
+            
+            return isForUser;
         });
 
-        console.log(`${userEmails.length} emails for user ${userEmail}`);
+        console.log(`${userEmails.length} Netflix emails for user ${userEmail}`);
 
         // Filter by EXACT 15 minutes
         const recentEmails = userEmails.filter(email => {
@@ -235,11 +267,19 @@ async function searchNetflixEmails(imapConfig, userEmail) {
         recentEmails.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         // Find LATEST relevant email
-        const relevantEmail = recentEmails.find(email => 
-            isRelevantNetflixLinkEmail(email.html, email.text)
-        );
+        const relevantEmail = recentEmails.find(email => {
+            const hasRelevantLink = isRelevantNetflixLinkEmail(email.html, email.text);
+            if (hasRelevantLink) {
+                console.log(`✓ Found relevant link in: ${email.subject}`);
+            } else {
+                console.log(`✗ No relevant link in: ${email.subject}`);
+            }
+            return hasRelevantLink;
+        });
 
         if (!relevantEmail) {
+            console.log('❌ No email with relevant Netflix links found');
+            console.log('Recent emails subjects:', recentEmails.map(e => e.subject));
             return [];
         }
 
