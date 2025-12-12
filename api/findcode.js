@@ -18,8 +18,8 @@ function isRelevantNetflixLinkEmail(htmlContent, textContent) {
     if (!htmlContent && !textContent) return false;
 
     // শুধুমাত্র এই ফিক্সড প্রিফিক্সগুলি চেক করব
-    const linkPrefix1 = 'https://www.netflix.com/account/travel/verify';
-    const linkPrefix2 = 'https://www.netflix.com/account/update-primary-location';
+    const linkPrefix1 = 'https://www.netflix.com/account/travel/verify?';
+    const linkPrefix2 = 'https://www.netflix.com/account/update-primary-location?';
 
     // HTML এবং Text কন্টেন্ট একসাথে করে নিচ্ছি
     const content = (htmlContent || '') + (textContent || '');
