@@ -214,7 +214,7 @@ async function searchNetflixEmailsGmail(userEmail) {
         parsedEmails.sort((a, b) => b.receivedAt - a.receivedAt);
 
         // Filter by 15 minutes (exact time check)
-        const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+        const fifteenMinAgo = new Date(Date.now() - 60 * 60 * 1000);
         const recentEmails = parsedEmails.filter(email => email.receivedAt >= fifteenMinAgo);
 
         console.log(`${recentEmails.length} emails in last 15 minutes`);
