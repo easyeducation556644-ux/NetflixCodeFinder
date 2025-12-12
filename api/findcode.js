@@ -1,15 +1,43 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 
-// Check if email contains relevant Netflix links
+// Check if email contains relevant Netflix links - RELAXED VERSION
 function isRelevantNetflixLinkEmail(htmlContent, textContent) {
     if (!htmlContent && !textContent) return false;
 
+    // Primary verification links
     const linkPrefix1 = 'https://www.netflix.com/account/travel/verify';
     const linkPrefix2 = 'https://www.netflix.com/account/update-primary-location';
+    
+    // Additional patterns to catch
+    const patterns = [
+        'netflix.com/account/travel',
+        'netflix.com/account/update',
+        'travel/verify',
+        'update-primary-location',
+        'temporary-access',
+        'verify-device',
+        'yesitwasme',
+        'yes-it-was-me'
+    ];
+    
     const content = (htmlContent || '') + (textContent || '');
+    const contentLower = content.toLowerCase();
 
-    return content.includes(linkPrefix1) || content.includes(linkPrefix2);
+    // Check exact links first
+    if (content.includes(linkPrefix1) || content.includes(linkPrefix2)) {
+        return true;
+    }
+    
+    // Check for any verification patterns
+    for (const pattern of patterns) {
+        if (contentLower.includes(pattern.toLowerCase())) {
+            console.log(`✓ Found pattern: ${pattern}`);
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 function sanitizeUrl(url) {
@@ -146,6 +174,9 @@ async function searchNetflixEmails(imapConfig, userEmail) {
         const now = new Date();
         const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
         
+        console.log(`Current time (UTC): ${now.toISOString()}`);
+        console.log(`15 minutes ago: ${fifteenMinutesAgo.toISOString()}`);
+        
         // Search last 24 HOURS to ensure we get emails
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         
@@ -242,9 +273,14 @@ async function searchNetflixEmails(imapConfig, userEmail) {
 
         console.log(`${userEmails.length} Netflix emails for user ${userEmail}`);
 
-        // Filter by EXACT 15 minutes
+        // Filter by EXACT 15 minutes - with better time comparison
         const recentEmails = userEmails.filter(email => {
-            return new Date(email.date) >= fifteenMinutesAgo;
+            const emailDate = new Date(email.date);
+            const isRecent = emailDate >= fifteenMinutesAgo;
+            
+            console.log(`Email: "${email.subject}" | Date: ${emailDate.toISOString()} | Recent: ${isRecent}`);
+            
+            return isRecent;
         });
 
         console.log(`${recentEmails.length} emails in last 15 minutes`);
