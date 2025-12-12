@@ -177,10 +177,11 @@ async function searchNetflixEmails(imapConfig, userEmail) {
         console.log(`Current time (UTC): ${now.toISOString()}`);
         console.log(`15 minutes ago: ${fifteenMinutesAgo.toISOString()}`);
         
-        // Search last 24 HOURS to ensure we get emails
-        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        // Format date for IMAP search (SINCE only supports date, not time)
+        // So we'll search from today and filter by exact time
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
         
-        // Format date for IMAP search
         const formatDate = (date) => {
             const day = date.getDate();
             const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -189,16 +190,17 @@ async function searchNetflixEmails(imapConfig, userEmail) {
             return `${day}-${month}-${year}`;
         };
 
-        console.log(`Searching emails since: ${formatDate(oneDayAgo)}`);
+        console.log(`Searching emails from today: ${formatDate(today)}`);
 
-        // Search ALL recent emails (no FROM filter initially)
+        // Search: Netflix emails TO this user from TODAY
         let searchResult;
         try {
-            // Simple search: all emails from last 24 hours
             searchResult = await client.search({
-                since: formatDate(oneDayAgo)
+                to: userEmail,  // Direct TO filter
+                from: 'netflix.com',  // Direct FROM filter
+                since: formatDate(today)  // Today's emails only
             });
-            console.log(`✓ Found ${searchResult.length} total emails in last 24 hours`);
+            console.log(`✓ Found ${searchResult.length} Netflix emails TO ${userEmail} today`);
         } catch (searchError) {
             console.error('❌ Search failed:', searchError);
             await client.logout();
@@ -206,15 +208,15 @@ async function searchNetflixEmails(imapConfig, userEmail) {
         }
 
         if (!searchResult || searchResult.length === 0) {
-            console.log('❌ No emails found in search at all');
+            console.log('❌ No emails found in search');
             await client.logout();
             return [];
         }
 
-        // Fetch ALL emails (limit to 200 for safety)
+        // Fetch only the found emails (should be very few now)
         const messages = [];
         
-        const emailIds = Array.from(searchResult).reverse().slice(0, 200); // Last 200 emails, newest first
+        const emailIds = Array.from(searchResult).reverse(); // Newest first
         console.log(`Fetching ${emailIds.length} emails...`);
         
         let fetchedCount = 0;
@@ -228,11 +230,6 @@ async function searchNetflixEmails(imapConfig, userEmail) {
                 if (parsed && parsed.date) {
                     messages.push(parsed);
                     fetchedCount++;
-                    
-                    // Log every 20 emails
-                    if (fetchedCount % 20 === 0) {
-                        console.log(`Fetched ${fetchedCount}/${emailIds.length} emails...`);
-                    }
                 }
             } catch (e) {
                 console.error('Parse error:', e);
@@ -245,36 +242,24 @@ async function searchNetflixEmails(imapConfig, userEmail) {
 
         const userEmailLower = userEmail.toLowerCase().trim();
 
-        // Filter for user's emails AND Netflix emails
-        const userEmails = messages.filter(email => {
-            // First check if from Netflix
+        // All emails are already Netflix TO this user, just verify
+        const netflixEmails = messages.filter(email => {
             const fromText = (email.from?.text || '').toLowerCase();
             const isFromNetflix = fromText.includes('netflix');
             
             if (!isFromNetflix) {
+                console.log(`Skipping non-Netflix: ${email.from?.text}`);
                 return false;
             }
             
-            // Then check if for this user
-            const toText = (email.to?.text || '').toLowerCase();
-            const ccText = (email.cc?.text || '').toLowerCase();
-            const htmlText = (email.html || '').toLowerCase();
-            
-            const isForUser = toText.includes(userEmailLower) || 
-                   ccText.includes(userEmailLower) ||
-                   htmlText.includes(userEmailLower);
-            
-            if (isForUser) {
-                console.log(`✓ Email for user: ${email.subject} (${email.date})`);
-            }
-            
-            return isForUser;
+            console.log(`✓ Netflix email: ${email.subject} (${email.date})`);
+            return true;
         });
 
-        console.log(`${userEmails.length} Netflix emails for user ${userEmail}`);
+        console.log(`${netflixEmails.length} verified Netflix emails`);
 
-        // Filter by EXACT 15 minutes - with better time comparison
-        const recentEmails = userEmails.filter(email => {
+        // Filter by EXACT 15 minutes
+        const recentEmails = netflixEmails.filter(email => {
             const emailDate = new Date(email.date);
             const isRecent = emailDate >= fifteenMinutesAgo;
             
@@ -364,21 +349,24 @@ export default async function handler(req, res) {
         const duration = Date.now() - startTime;
         
         console.log(`Search completed in ${duration}ms`);
+        console.log(`Results:`, results ? results.length : 0, 'emails');
         
         if (results && results.length > 0) {
-            res.status(200).json({ 
+            console.log('Sending response with email data');
+            return res.status(200).json({ 
                 emails: results, 
                 totalCount: results.length 
             });
         } else {
-            res.status(404).json({
+            console.log('No emails found - sending 404');
+            return res.status(404).json({
                 error: "No Netflix email found for this address in the last 15 minutes."
             });
         }
     } catch (error) {
         const duration = Date.now() - startTime;
         console.error(`Error after ${duration}ms:`, error);
-        res.status(500).json({ 
+        return res.status(500).json({ 
             error: getUserFriendlyError(error) 
         });
     }
