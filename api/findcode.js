@@ -1,8 +1,10 @@
 import Imap from "imap";
 import { simpleParser } from "mailparser";
+// import translatte from "translatte"; // অনুবাদ মডিউলটি আর প্রয়োজন নেই
 
-// --- Helper Functions (আপনার দেওয়া কোড অনুযায়ী) ---
+// --- Helper Functions ---
 
+// IMAP সার্চের জন্য তারিখকে 'DD-Mon-YYYY' ফরম্যাটে কনভার্ট করে
 function formatImapDate(date) {
     const day = date.getDate().toString().padStart(2, '0');
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -11,46 +13,95 @@ function formatImapDate(date) {
     return `${day}-${month}-${year}`;
 }
 
-// লিঙ্ক চেক করার লজিক
+// নতুন ফিল্টারিং লজিক: ইমেইলের কন্টেন্টে নির্দিষ্ট লিঙ্ক প্রিফিক্স আছে কিনা তা চেক করে
 function isRelevantNetflixLinkEmail(htmlContent, textContent) {
     if (!htmlContent && !textContent) return false;
 
+    // শুধুমাত্র এই ফিক্সড প্রিফিক্সগুলি চেক করব
     const linkPrefix1 = 'https://www.netflix.com/account/travel/verify';
     const linkPrefix2 = 'https://www.netflix.com/account/update-primary-location';
 
+    // HTML এবং Text কন্টেন্ট একসাথে করে নিচ্ছি
     const content = (htmlContent || '') + (textContent || '');
 
     const includesLink1 = content.includes(linkPrefix1);
     const includesLink2 = content.includes(linkPrefix2);
 
+    // যেকোনো একটি লিঙ্ক থাকলেই ইমেইলটি প্রাসঙ্গিক
     return includesLink1 || includesLink2;
 }
 
 function sanitizeUrl(url) {
     if (!url || typeof url !== 'string') return null;
+
     const trimmedUrl = url.trim();
+
+    let urlObj;
     try {
-        const urlObj = new URL(trimmedUrl);
-        const protocol = urlObj.protocol.toLowerCase();
-        if (protocol !== 'http:' && protocol !== 'https:') return null;
-        
-        const hostname = urlObj.hostname.toLowerCase();
-        const allowedDomains = ['netflix.com', 'www.netflix.com', 'nflxso.net', 'www.nflxso.net', 'email.netflix.com', 'click.netflix.com'];
-        
-        if (allowedDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain))) {
-            return trimmedUrl;
-        }
+        urlObj = new URL(trimmedUrl);
     } catch (e) {
         return null;
     }
-    return null;
+
+    const protocol = urlObj.protocol.toLowerCase();
+    if (protocol !== 'http:' && protocol !== 'https:') {
+        return null;
+    }
+
+    let decodedUrl;
+    try {
+        decodedUrl = decodeURIComponent(trimmedUrl.toLowerCase());
+    } catch (e) {
+        decodedUrl = trimmedUrl.toLowerCase();
+    }
+
+    const dangerousPatterns = [
+        'javascript:',
+        'data:',
+        'vbscript:',
+        '<script',
+        'onerror',
+        'onclick',
+        'onload',
+        'onmouseover',
+    ];
+
+    for (const pattern of dangerousPatterns) {
+        if (decodedUrl.includes(pattern)) {
+            return null;
+        }
+    }
+
+    const hostname = urlObj.hostname.toLowerCase();
+    const allowedDomains = [
+        'netflix.com',
+        'www.netflix.com',
+        'nflxso.net',
+        'www.nflxso.net',
+        'email.netflix.com',
+        'click.netflix.com',
+    ];
+
+    const isAllowed = allowedDomains.some(domain => {
+        return hostname === domain || hostname.endsWith('.' + domain);
+    });
+
+    if (!isAllowed) {
+        return null;
+    }
+
+    return trimmedUrl;
 }
 
+// এই ফাংশনটি এখন শুধু লিঙ্কগুলি স্যানিটাইজ করবে এবং গুরুত্বপূর্ণ বাটনগুলিতে স্টাইল যোগ করবে, কোনো অনুবাদ করবে না।
 async function sanitizeAndStyleHtml(html) {
     if (!html || html.trim() === "") return html;
 
-    let processedHtml = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    let processedHtml = html
+        // নিরাপত্তার জন্য script ট্যাগগুলি সরিয়ে দেওয়া হলো
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
 
+    // লিঙ্ক স্যানিটাইজেশন এবং স্টাইলিং:
     processedHtml = processedHtml.replace(/<a([^>]*)href\s*=\s*['"]([^'"]*)['"]([^>]*)>/gi, (match, preAttrs, url, postAttrs) => {
         const urlClean = url.replace(/&amp;/g, '&').toLowerCase();
         const safeUrl = sanitizeUrl(url.replace(/&amp;/g, '&'));
@@ -63,7 +114,7 @@ async function sanitizeAndStyleHtml(html) {
         if (isYesItsMe || isGetCode) {
             let newAttrs = preAttrs + postAttrs;
             const buttonStyle = 'color: #ffffff !important; background-color: #e50914 !important; padding: 10px 20px; border-radius: 4px; display: inline-block; text-decoration: none; font-weight: bold; border: 1px solid #e50914; margin: 10px 0;';
-            
+
             if (newAttrs.includes('style=')) {
                 newAttrs = newAttrs.replace(/style\s*=\s*["']([^"']*)["']/i, (m, styles) => `style="${styles}; ${buttonStyle}"`);
             } else {
@@ -71,6 +122,7 @@ async function sanitizeAndStyleHtml(html) {
             }
             return `<a${newAttrs} href="${safeUrl}" target="_blank" rel="noopener noreferrer">`;
         }
+
         return `<a${preAttrs} href="${safeUrl}"${postAttrs} target="_blank" rel="noopener noreferrer">`;
     });
 
@@ -78,28 +130,48 @@ async function sanitizeAndStyleHtml(html) {
 }
 
 function getUserFriendlyError(error) {
-    const msg = (error.message || error.toString()).toLowerCase();
-    if (msg.includes("authenticationfailed") || msg.includes("invalid credentials")) return "Email login failed. Check email or app password.";
-    if (msg.includes("enotfound") || msg.includes("timeout")) return "Connection timed out. Please try again.";
-    return "Something went wrong while checking emails.";
+    const errorMessage = error.message || error.toString();
+    console.error("Raw IMAP Error:", errorMessage);
+
+    if (errorMessage.includes("AUTHENTICATIONFAILED") || errorMessage.includes("Invalid credentials")) {
+        return "Email login failed. The email or password may be incorrect or you need an App Password.";
+    }
+    if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("getaddrinfo")) {
+        return "Could not connect to email server. Please check the server address or internet connection.";
+    }
+    if (errorMessage.includes("ETIMEDOUT") || errorMessage.includes("timeout")) {
+        return "Connection timed out. Please try again.";
+    }
+    if (errorMessage.includes("ECONNREFUSED")) {
+        return "Connection refused by email server. Please try again later.";
+    }
+
+    return "An unknown error occurred while searching emails. Check logs for details.";
 }
 
 // --- নতুন Helper: নির্দিষ্ট UID দিয়ে বডি নামানো ---
 function fetchMessageBody(imap, uid) {
     return new Promise((resolve) => {
+        console.log(`[IMAP] Attempting to fetch body for UID: ${uid}`);
         const fetch = imap.fetch(uid, { bodies: '' });
+        
         fetch.on('message', (msg) => {
             msg.on('body', (stream) => {
                 simpleParser(stream, (err, parsed) => {
-                    if (err) resolve(null);
+                    if (err) {
+                        console.error(`[IMAP] Error parsing body for UID ${uid}:`, err);
+                        resolve(null);
+                    }
                     else resolve(parsed);
                 });
             });
         });
-        fetch.once('error', () => resolve(null));
-        fetch.once('end', () => { 
-            // Fallback
+
+        fetch.once('error', (err) => {
+            console.error(`[IMAP] Fetch error for UID ${uid}:`, err);
+            resolve(null);
         });
+        fetch.once('end', () => {});
     });
 }
 
@@ -108,53 +180,65 @@ function fetchMessageBody(imap, uid) {
 function searchNetflixEmails(imapConfig, userEmail) {
     return new Promise((resolve, reject) => {
         const imap = new Imap(imapConfig);
-        // Vercel Timeout Safety (9 seconds)
+        // Serverless safety limit
         const TIMEOUT_MS = 9000; 
         let isResolved = false;
 
         const timeoutTimer = setTimeout(() => {
             if (!isResolved) {
                 isResolved = true;
+                console.warn(`[IMAP] Process timed out after ${TIMEOUT_MS / 1000}s. Ending IMAP connection.`);
                 imap.end();
-                reject(new Error("Search process timed out."));
+                reject(new Error("Search process timed out. (Serverless limit exceeded)"));
             }
         }, TIMEOUT_MS);
 
         imap.once("ready", () => {
+            console.log("[IMAP] Connection Ready. Opening INBOX.");
             imap.openBox("INBOX", true, (err, box) => {
                 if (err) {
+                    console.error("[IMAP] Error opening INBOX:", err);
                     if (!isResolved) { isResolved = true; clearTimeout(timeoutTimer); reject(err); }
                     return;
                 }
+                console.log(`[IMAP] INBOX opened. Total messages: ${box.messages.total}`);
 
                 const now = new Date();
-                // ১. আজ সারাদিনের নেটফ্লিক্স ইমেইল খুঁজুন (IMAP 'SINCE' শুধু দিন চেনে, সময় চেনে না)
+                const todayDate = formatImapDate(now);
+                
+                // ১. IMAP সার্চ: আজকে আসা Netflix ইমেইল খুঁজুন (Date-level search)
                 const searchCriteria = [
                     ['FROM', 'netflix.com'],
-                    ['SINCE', formatImapDate(now)] 
+                    ['SINCE', todayDate] 
                 ];
+                console.log(`[IMAP] Searching with criteria: FROM 'netflix.com' SINCE ${todayDate}`);
+
 
                 imap.search(searchCriteria, (err, results) => {
                     if (err) {
+                        console.error("[IMAP] Search command failed:", err);
                         if (!isResolved) { isResolved = true; imap.end(); clearTimeout(timeoutTimer); reject(err); }
                         return;
                     }
 
                     if (!results || results.length === 0) {
+                        console.log("[IMAP] No Netflix emails found since today.");
                         if (!isResolved) { isResolved = true; imap.end(); clearTimeout(timeoutTimer); resolve([]); }
                         return;
                     }
+                    
+                    const totalFound = results.length;
+                    console.log(`[IMAP] Found ${totalFound} raw Netflix emails today. Processing last 50 for headers.`);
 
-                    // ২. শুধুমাত্র HEADER ডাউনলোড করুন (বডি নয়) - এতে সার্ভার ক্র্যাশ করবে না
-                    // গত ৫০টি ইমেইল চেক করা হচ্ছে নিরাপত্তার জন্য
+                    // ২. শুধুমাত্র HEADER ডাউনলোড করুন
                     const recentResults = results.slice(-50); 
-                    const fetch = imap.fetch(recentResults, { bodies: 'HEADER.FIELDS (FROM TO DATE SUBJECT)' });
+                    const fetch = imap.fetch(recentResults, { bodies: 'HEADER.FIELDS (FROM TO DATE SUBJECT)', uid: true });
                     
                     const candidates = [];
 
-                    fetch.on("message", (msg, seqno) => {
+                    fetch.on("message", (msg) => {
                         let headerData = "";
-                        let uid = seqno; 
+                        let uid = null; 
 
                         msg.once("attributes", (attrs) => {
                             uid = attrs.uid;
@@ -172,26 +256,29 @@ function searchNetflixEmails(imapConfig, userEmail) {
                             const toMatch = headerData.match(/To: (.+)(\r\n|\n)/i);
                             const subjectMatch = headerData.match(/Subject: (.+)(\r\n|\n)/i);
 
-                            const emailDate = dateMatch ? new Date(dateMatch[1]) : new Date();
+                            const emailDate = dateMatch ? new Date(dateMatch[1]) : new Date(0); // Fallback date
                             const toAddress = toMatch ? toMatch[1].toLowerCase() : "";
                             const subject = subjectMatch ? subjectMatch[1].trim() : "Netflix Email";
 
-                            // ৩. এখানেই ইউজার ইমেইল এবং ১৫ মিনিটের লজিক চেক করা হচ্ছে
-                            const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000); // ১৫ মিনিট
+                            // ৩. JS Filter: ১৫ মিনিট এবং সঠিক ইউজার
+                            const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000); 
                             const userEmailLower = userEmail.toLowerCase().trim();
 
-                            // কন্ডিশন: ইমেইলটি ১৫ মিনিটের মধ্যে হতে হবে এবং ইউজারের মেইলে আসতে হবে
                             if (emailDate >= fifteenMinutesAgo && toAddress.includes(userEmailLower)) {
                                 candidates.push({ uid, date: emailDate, subject });
+                                console.log(`[IMAP] Candidate found (UID: ${uid}, Date: ${emailDate.toISOString()})`);
                             }
                         });
                     });
 
                     fetch.once("error", (err) => {
+                        console.error("[IMAP] Header fetch error:", err);
                         if (!isResolved) { isResolved = true; imap.end(); clearTimeout(timeoutTimer); reject(err); }
                     });
 
                     fetch.once("end", async () => {
+                        console.log(`[IMAP] Header fetch complete. ${candidates.length} candidates passed the 15-min and TO filter.`);
+
                         if (candidates.length === 0) {
                             if (!isResolved) { isResolved = true; imap.end(); clearTimeout(timeoutTimer); resolve([]); }
                             return;
@@ -203,17 +290,18 @@ function searchNetflixEmails(imapConfig, userEmail) {
                         let foundEmail = null;
 
                         try {
-                            // ৫. লুপ চালিয়ে বডি চেক করা (শুধুমাত্র সিলেক্টেড ইমেইলগুলোর)
-                            // সবগুলোর বডি একসাথে নামালে মেমোরি লিক হবে, তাই লুপ ব্যবহার করা হয়েছে
-                            for (const candidate of candidates) {
-                                // বডি ফেচ করা
+                            // ৫. লুপ চালিয়ে বডি চেক করা (প্রথম ৫টি)
+                            const topCandidates = candidates.slice(0, 5); // শুধুমাত্র প্রথম ৫টি চেক করা হচ্ছে সার্ভার লোড কমানোর জন্য
+                            console.log(`[IMAP] Checking body for ${topCandidates.length} best candidates for link...`);
+
+                            for (const candidate of topCandidates) {
                                 const parsedEmail = await fetchMessageBody(imap, candidate.uid);
                                 
                                 if (parsedEmail) {
                                     // লিঙ্ক চেক করা
                                     if (isRelevantNetflixLinkEmail(parsedEmail.html, parsedEmail.text)) {
+                                        console.log(`[IMAP] Relevant link found in UID: ${candidate.uid}. Stopping search.`);
                                         
-                                        // লিঙ্ক পাওয়া গেলে স্টাইল করে রিটার্ন করার জন্য রেডি করা
                                         const sanitizedHtml = await sanitizeAndStyleHtml(parsedEmail.html || "");
                                         
                                         foundEmail = {
@@ -224,13 +312,14 @@ function searchNetflixEmails(imapConfig, userEmail) {
                                             to: parsedEmail.to?.text || userEmail,
                                             rawHtml: sanitizedHtml
                                         };
-                                        // প্রথম সঠিক ইমেইল পেলেই লুপ ব্রেক করে দেব
-                                        break; 
+                                        break; // প্রথম সঠিক ইমেইল পেলেই লুপ ব্রেক
+                                    } else {
+                                        console.log(`[IMAP] UID ${candidate.uid} passed time/user filter but failed link check.`);
                                     }
                                 }
                             }
                         } catch (e) {
-                            console.error("Body fetch error:", e);
+                            console.error("[IMAP] Error during body fetch/parse loop:", e);
                         }
 
                         // ৬. ফাইনাল রেজাল্ট পাঠানো
@@ -238,6 +327,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
                             isResolved = true;
                             imap.end();
                             clearTimeout(timeoutTimer);
+                            console.log(`[IMAP] Search finished. Found Email: ${!!foundEmail}`);
                             if (foundEmail) {
                                 resolve([foundEmail]);
                             } else {
@@ -250,6 +340,7 @@ function searchNetflixEmails(imapConfig, userEmail) {
         });
 
         imap.once("error", (err) => {
+            console.error("[IMAP] Connection Error Occurred:", err);
             if (!isResolved) {
                 isResolved = true;
                 clearTimeout(timeoutTimer);
@@ -280,31 +371,34 @@ export default async function handler(req, res) {
         port: parseInt(process.env.EMAIL_PORT || "993", 10),
         tls: process.env.EMAIL_TLS !== "false",
         tlsOptions: { rejectUnauthorized: false },
-        authTimeout: 3000 // দ্রুত ফেইল করার জন্য
+        authTimeout: 3000
     };
 
     if (!imapConfig.user || !imapConfig.password) {
         return res.status(500).json({
-            error: "Email service is not configured."
+            error: "Email service is not configured. Please contact the administrator (Missing environment variables)."
         });
     }
+
+    console.log(`\n--- New Email Search Request Started for: ${email} ---`);
 
     try {
         const results = await searchNetflixEmails(imapConfig, email);
         if (results && results.length > 0) {
+            console.log("--- Request Success: Email Found ---");
             res.status(200).json({ emails: results, totalCount: 1 });
         } else {
-            // 404 দিলে অনেক সময় ক্লায়েন্ট সাইডে এরর দেখায়, তাই 200 দিচ্ছি কিন্তু খালি অ্যারে সহ
+            console.log("--- Request Success: No Relevant Email Found ---");
             res.status(200).json({
                 emails: [],
                 message: "No Netflix verification email found in the last 15 minutes."
             });
         }
     } catch (error) {
+        console.error("--- Request Failed at Handler Level ---");
         res.status(500).json({
             error: getUserFriendlyError(error)
         });
     }
 }
-
 
