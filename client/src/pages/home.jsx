@@ -115,33 +115,43 @@ function extractTextNodes(element) {
   return textNodes;
 }
 
-// Email content component with line-by-line translation
+// Email content component with line-by-line translation - FIXED VERSION
 function EmailContent({ email, emailId, targetLanguage }) {
   const containerRef = useRef(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState(0);
-  const [hasTranslated, setHasTranslated] = useState(false);
-  const translationKey = useRef(`${emailId}-${targetLanguage}`);
+  const [currentLanguage, setCurrentLanguage] = useState(targetLanguage);
+  const originalHtmlRef = useRef(email.rawHtml);
+
+  // Update original HTML ref when email changes
+  useEffect(() => {
+    originalHtmlRef.current = email.rawHtml;
+  }, [email.rawHtml]);
+
+  // Reset when language changes
+  useEffect(() => {
+    if (currentLanguage !== targetLanguage) {
+      console.log(`Language changed: ${currentLanguage} -> ${targetLanguage}`);
+      setCurrentLanguage(targetLanguage);
+      setIsTranslating(false);
+      setTranslationProgress(0);
+      
+      // Reset to original HTML
+      if (containerRef.current && originalHtmlRef.current) {
+        containerRef.current.innerHTML = originalHtmlRef.current;
+      }
+    }
+  }, [targetLanguage, currentLanguage]);
 
   // Initialize: Parse HTML and show original
   useEffect(() => {
-    if (!containerRef.current || !email.rawHtml) return;
-    containerRef.current.innerHTML = email.rawHtml;
-    setHasTranslated(false);
-    translationKey.current = `${emailId}-${targetLanguage}`;
-  }, [email.rawHtml, emailId]);
+    if (!containerRef.current || !originalHtmlRef.current) return;
+    containerRef.current.innerHTML = originalHtmlRef.current;
+  }, [emailId]);
 
   // Start translation after showing original
   useEffect(() => {
-    // If already translated this email in this language, skip
-    if (hasTranslated) return;
-    
-    // Reset to original HTML when language changes
-    if (containerRef.current && email.rawHtml) {
-      containerRef.current.innerHTML = email.rawHtml;
-    }
-    
-    if (!containerRef.current || !email.rawHtml) return;
+    if (!containerRef.current || !originalHtmlRef.current) return;
 
     let mounted = true;
 
@@ -149,20 +159,28 @@ function EmailContent({ email, emailId, targetLanguage }) {
       setIsTranslating(true);
       setTranslationProgress(0);
       
+      // Small delay to show original first
+      await new Promise(r => setTimeout(r, 300));
+      
+      if (!mounted) return;
+      
       // Extract text nodes from the actual DOM
       const liveNodes = extractTextNodes(containerRef.current);
       
       if (liveNodes.length === 0) {
         setIsTranslating(false);
-        setHasTranslated(true);
         return;
       }
+
+      console.log(`Translating ${liveNodes.length} text nodes to ${targetLanguage}`);
 
       // Collect all texts for batch translation
       const allTexts = liveNodes.map(n => n.originalText);
       
       // Translate in batch
       const translatedTexts = await translateTextBatch(allTexts, targetLanguage);
+      
+      if (!mounted) return;
       
       // Apply translations one by one with animation
       for (let i = 0; i < liveNodes.length; i++) {
@@ -182,29 +200,29 @@ function EmailContent({ email, emailId, targetLanguage }) {
         // Small delay for visual effect
         await new Promise(r => setTimeout(r, 50));
         
+        if (!mounted) break;
+        
         // Remove blinking effect
         nodeInfo.parent.classList.remove('translating-line');
       }
       
-      setIsTranslating(false);
-      setTranslationProgress(100);
-      setHasTranslated(true);
+      if (mounted) {
+        setIsTranslating(false);
+        setTranslationProgress(100);
+        console.log(`Translation completed for ${targetLanguage}`);
+      }
     }
 
-    // Start translation after a small delay
-    const timer = setTimeout(() => {
-      translateLineByLine();
-    }, 300);
+    translateLineByLine();
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
     };
-  }, [email.rawHtml, targetLanguage, emailId, hasTranslated]);
+  }, [targetLanguage, emailId]); // Re-run when language or email changes
 
   return (
     <div className="w-full relative" data-testid={`email-content-${emailId}`}>
-      <style jsx>{`
+      <style>{`
         @keyframes blink-translate {
           0%, 100% { 
             background-color: transparent;
