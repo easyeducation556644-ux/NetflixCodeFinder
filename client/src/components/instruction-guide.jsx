@@ -110,7 +110,7 @@ export function InstructionGuide({ onComplete }) {
       >
         <Card className="overflow-hidden border-none bg-card/95 flex-1 flex flex-col">
           <CardContent className="p-0 flex-1 flex flex-col md:flex-row overflow-hidden">
-            <div className="relative w-full md:w-2/5 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[200px] md:min-h-0 border-b md:border-b-0 md:border-r border-border/50">
+            <div className="relative w-full md:w-1/2 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[250px] md:min-h-0 border-b md:border-b-0 md:border-r border-border/50">
               <AnimatePresence mode="wait">
                 <motion.img
                   key={step}
@@ -120,7 +120,7 @@ export function InstructionGuide({ onComplete }) {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="w-full h-full object-contain p-4 md:p-6"
+                  className="w-full h-full object-contain md:object-scale-down p-4 md:p-8"
                 />
               </AnimatePresence>
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-10">
@@ -133,20 +133,21 @@ export function InstructionGuide({ onComplete }) {
               </div>
             </div>
             
-            <div className="w-full md:w-3/5 p-4 sm:p-6 md:p-8 flex flex-col bg-card overflow-hidden">
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="w-full md:w-1/2 p-4 sm:p-6 md:p-10 flex flex-col bg-card overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar flex items-center">
                 <motion.div
                   key={step}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
+                  className="w-full"
                 >
-                  <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide">
+                  <h2 className="text-lg md:text-2xl font-bold mb-4 text-primary leading-tight uppercase tracking-wide">
                     {steps[step].title}
                   </h2>
                   
                   {steps[step].subtitle && (
-                    <div className="mb-4 text-xs md:text-sm italic border-l-4 border-primary/30 pl-3 py-1 bg-primary/5 rounded-r min-h-[32px]">
+                    <div className="mb-6 text-xs md:text-base italic border-l-4 border-primary/30 pl-4 py-2 bg-primary/5 rounded-r">
                       <p className="text-muted-foreground">{formatText(steps[step].subtitle)}</p>
                     </div>
                   )}
@@ -158,14 +159,14 @@ export function InstructionGuide({ onComplete }) {
                           <h3 className="text-sm font-bold text-foreground border-b border-border pb-1 min-h-[21px]">
                             {section.title}
                           </h3>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {section.content.map((text, i) => (
-                              <div key={i} className="flex gap-2 items-start">
-                                <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold">
+                              <div key={i} className="flex gap-3 items-start">
+                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs font-bold">
                                   {i + 1}
                                 </div>
-                                <div className="flex-1 min-h-[16px]">
-                                  <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                                <div className="flex-1">
+                                  <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">
                                     {formatText(text)}
                                   </p>
                                 </div>
@@ -176,14 +177,14 @@ export function InstructionGuide({ onComplete }) {
                       ))
                     ) : (
                       steps[step].content.map((text, i) => (
-                        <div key={i} className="flex gap-2 items-start bg-neutral-900/40 p-2 rounded border border-neutral-800/50 min-h-[40px]">
+                        <div key={i} className="flex gap-3 items-start bg-neutral-900/40 p-3 rounded border border-neutral-800/50">
                           {steps[step].type === "troubleshoot" ? (
-                            <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
                           ) : (
-                            <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                            <Info className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                           )}
                           <div className="flex-1">
-                            <div className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                            <div className="text-xs md:text-sm text-muted-foreground leading-relaxed">
                               {formatText(text)}
                             </div>
                           </div>
