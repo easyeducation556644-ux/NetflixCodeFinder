@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
-import { ChevronRight, ChevronLeft, Check, AlertCircle, Info } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, AlertCircle, Info, ExternalLink } from "lucide-react";
 import guideImage1 from "@/assets/stock_images/guide_1.png";
 import guideImage2 from "@/assets/stock_images/guide_2.png";
 import guideImage3 from "@/assets/stock_images/guide_3.png";
@@ -68,6 +68,33 @@ export function InstructionGuide({ onComplete }) {
     }
   };
 
+  const formatText = (text) => {
+    if (!text) return null;
+    
+    // Regular expression to find URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-primary hover:text-primary/80 font-bold underline decoration-primary/30 underline-offset-4 transition-all hover:decoration-primary"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part.replace(/^https?:\/\//, '')}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-hidden">
       <motion.div 
@@ -117,7 +144,7 @@ export function InstructionGuide({ onComplete }) {
                   
                   {steps[step].subtitle && (
                     <p className="text-muted-foreground mb-6 text-sm md:text-base italic border-l-4 border-primary/30 pl-4 py-1">
-                      {steps[step].subtitle}
+                      {formatText(steps[step].subtitle)}
                     </p>
                   )}
 
@@ -131,10 +158,10 @@ export function InstructionGuide({ onComplete }) {
                             </div>
                             <div className="flex-1 space-y-1">
                               <p className="font-semibold text-foreground text-sm md:text-base">
-                                {text.split('\n')[0]}
+                                {formatText(text.split('\n')[0])}
                               </p>
                               <p className="text-xs md:text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                                {text.split('\n').slice(1).join('\n')}
+                                {formatText(text.split('\n').slice(1).join('\n'))}
                               </p>
                             </div>
                           </div>
@@ -145,9 +172,9 @@ export function InstructionGuide({ onComplete }) {
                             ) : (
                               <Info className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                             )}
-                            <p className="text-sm md:text-base text-muted-foreground leading-relaxed whitespace-pre-line">
-                              {text}
-                            </p>
+                            <div className="text-sm md:text-base text-muted-foreground leading-relaxed whitespace-pre-line">
+                              {formatText(text)}
+                            </div>
                           </div>
                         )}
                       </div>
