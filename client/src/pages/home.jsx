@@ -15,24 +15,6 @@ import { useLanguage } from "@/hooks/use-language";
 // Translation cache - global persist
 const translationCache = new Map();
 
-// Helper to translate text using hardcoded translations first, then fallback to Google Translate
-function translateUI(key, t, targetLang) {
-  // If we have a nested key like 'guide.welcome'
-  const keys = key.split('.');
-  let value = t;
-  for (const k of keys) {
-    if (value && value[k]) {
-      value = value[k];
-    } else {
-      value = null;
-      break;
-    }
-  }
-  
-  if (typeof value === 'string') return value;
-  return key; // Fallback to key if not found
-}
-
 // Google Translate helper with batch support
 async function translateTextBatch(texts, targetLang) {
   if (!texts || texts.length === 0) return [];
@@ -282,59 +264,6 @@ export default function Home() {
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const [results, setResults] = useState(null);
-  const containerRef = useRef(null);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [progress, setProgress] = useState(0);
-
-  // Auto-translate Home page if not English and not hardcoded
-  useEffect(() => {
-    if (language === 'en') return;
-    
-    // Check if we have hardcoded translations for the current language
-    // We'll check a key that should exist in all hardcoded translations
-    const isHardcoded = t.title && t.title !== "CODE GETTER";
-    
-    if (isHardcoded) return;
-
-    let mounted = true;
-    async function translatePage() {
-      setIsTranslating(true);
-      setProgress(0);
-      
-      const nodes = extractTextNodes(document.body);
-      // Filter out nodes already translated or inside certain components
-      const targetNodes = nodes.filter(n => {
-        const p = n.parent;
-        return !p.closest('.notranslate') && !p.closest('.email-content-wrapper');
-      });
-
-      if (targetNodes.length === 0) {
-        setIsTranslating(false);
-        return;
-      }
-
-      const texts = targetNodes.map(n => n.originalText);
-      const translated = await translateTextBatch(texts, language);
-
-      if (!mounted) return;
-
-      for (let i = 0; i < targetNodes.length; i++) {
-        if (!mounted) break;
-        setProgress(Math.round(((i + 1) / targetNodes.length) * 100));
-        targetNodes[i].node.nodeValue = translated[i];
-        if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
-      }
-
-      if (mounted) setIsTranslating(false);
-    }
-
-    // Delay slightly to let initial render finish
-    const timer = setTimeout(translatePage, 500);
-    return () => {
-      mounted = false;
-      clearTimeout(timer);
-    };
-  }, [language, t]);
 
   const formSchema = useMemo(() => z.object({ email: z.string().email({ message: t.validEmailError }) }), [t]);
   const form = useForm({ resolver: zodResolver(formSchema), defaultValues: { email: "" } });
@@ -368,12 +297,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center p-2 sm:p-4 bg-neutral-950">
-      {isTranslating && (
-        <div className="fixed bottom-4 left-4 bg-neutral-900/90 backdrop-blur-sm border border-neutral-800 rounded-full px-4 py-2 flex items-center gap-3 z-50 shadow-2xl">
-          <Loader2 className="w-4 h-4 animate-spin text-red-500" />
-          <span className="text-sm font-medium text-white">Translating Page... {progress}%</span>
-        </div>
-      )}
       <motion.div 
         initial={{ opacity: 0, y: -20 }} 
         animate={{ opacity: 1, y: 0 }} 
