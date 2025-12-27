@@ -4,9 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
 import { ChevronRight, ChevronLeft, Check } from "lucide-react";
-import guideImage1 from "@/assets/stock_images/modern_clean_technol_154b19b4.jpg";
-import guideImage2 from "@/assets/stock_images/modern_clean_technol_d3ff6f41.jpg";
-import guideImage3 from "@/assets/stock_images/modern_clean_technol_2270c004.jpg";
+import guideImage1 from "@/assets/stock_images/netflix_household_up_1d93c12e.jpg";
+import guideImage2 from "@/assets/stock_images/netflix_temporary_ac_8dbcca93.jpg";
+import guideImage3 from "@/assets/stock_images/netflix_email_verifi_160d4944.jpg";
 
 export function InstructionGuide({ onComplete }) {
   const { t } = useLanguage();
@@ -27,6 +27,11 @@ export function InstructionGuide({ onComplete }) {
       title: t.guide.step3Title,
       description: t.guide.step3Desc,
       image: guideImage3
+    },
+    {
+      title: t.guide.step4Title,
+      description: t.guide.step4Desc,
+      image: guideImage3 // Reusing verification image for troubleshooting context
     }
   ];
 

@@ -18,12 +18,14 @@ const translations = {
     validEmailError: "Please enter a valid email address.",
     guide: {
       welcome: "Welcome to Code Getter",
-      step1Title: "Open Netflix",
-      step1Desc: "Go to your Netflix app and request a temporary access code or household update.",
-      step2Title: "Enter Email",
-      step2Desc: "Enter your registered email address on this website to search for the code.",
+      step1Title: "Update Netflix Household",
+      step1Desc: "Click 'Update Netflix Household' then 'Send Email'. Netflix will send a verification link.",
+      step2Title: "Traveling or Temporary?",
+      step2Desc: "Select 'I'm Traveling' or 'Watch Temporarily' and click 'Send Email' for a temporary code.",
       step3Title: "Get Your Code",
-      step3Desc: "Our system will find the latest Netflix email and display the code for you instantly.",
+      step3Desc: "Enter your email here, click 'Find Code', and approve your device or get the access code instantly.",
+      step4Title: "Troubleshooting",
+      step4Desc: "If no link arrives, try changing networks, restarting your router, or using a different device.",
       gotIt: "Got It, Let's Start!",
       backToGuide: "View Instructions"
     }
@@ -46,12 +48,14 @@ const translations = {
     validEmailError: "অনুগ্রহ করে একটি বৈধ ইমেইল ঠিকানা লিখুন।",
     guide: {
       welcome: "Code Getter-এ আপনাকে স্বাগতম",
-      step1Title: "Netflix ওপেন করুন",
-      step1Desc: "আপনার Netflix অ্যাপে যান এবং একটি টেম্পোরারি অ্যাক্সেস কোড বা হাউসহোল্ড আপডেটের জন্য অনুরোধ করুন।",
-      step2Title: "ইমেইল লিখুন",
-      step2Desc: "কোডটি খোঁজার জন্য এই ওয়েবসাইটে আপনার নিবন্ধিত ইমেইল ঠিকানাটি লিখুন।",
-      step3Title: "কোডটি নিন",
-      step3Desc: "আমাদের সিস্টেম সর্বশেষ Netflix ইমেইলটি খুঁজে বের করবে এবং আপনার কোডটি তাৎক্ষণিকভাবে দেখাবে।",
+      step1Title: "Netflix হাউসহোল্ড আপডেট",
+      step1Desc: "'Update Netflix Household' ক্লিক করে 'Send Email' দিন। একটি ভেরিফিকেশন লিঙ্ক পাঠানো হবে।",
+      step2Title: "ভ্রমণ বা সাময়িক অ্যাক্সেস?",
+      step2Desc: "'I'm Traveling' বা 'Watch Temporarily' সিলেক্ট করে 'Send Email' দিন সাময়িক কোডের জন্য।",
+      step3Title: "কোডটি সংগ্রহ করুন",
+      step3Desc: "এখানে ইমেইল লিখে 'Find Code' ক্লিক করুন এবং আপনার ডিভাইস অ্যাপ্রুভ করুন বা কোড নিন।",
+      step4Title: "সমস্যা সমাধান",
+      step4Desc: "লিঙ্ক না পেলে নেটওয়ার্ক পরিবর্তন করুন, রাউটার রিস্টার্ট দিন বা অন্য ডিভাইস ব্যবহার করুন।",
       gotIt: "বুঝতে পেরেছি, শুরু করি!",
       backToGuide: "নির্দেশিকা দেখুন"
     }
