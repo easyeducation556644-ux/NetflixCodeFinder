@@ -109,18 +109,18 @@ export function InstructionGuide({ onComplete }) {
         className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col shadow-2xl"
       >
         <Card className="overflow-hidden border-none bg-card/95 flex-1 flex flex-col">
-          <CardContent className="p-0 flex-1 flex flex-col md:flex-row overflow-hidden">
-            <div className="relative w-full md:w-1/2 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[250px] md:min-h-0 border-b md:border-b-0 md:border-r border-border/50">
+          <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
+            <div className="relative w-full bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[250px] sm:min-h-[300px] md:min-h-[400px] border-b border-border/50">
               <AnimatePresence mode="wait">
                 <motion.img
                   key={step}
                   src={steps[step].image}
                   alt={steps[step].title}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.3 }}
-                  className="w-full h-full object-contain md:object-scale-down p-4 md:p-8"
+                  className="w-full h-full object-contain p-4 md:p-8"
                 />
               </AnimatePresence>
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-10">
@@ -133,8 +133,8 @@ export function InstructionGuide({ onComplete }) {
               </div>
             </div>
             
-            <div className="w-full md:w-1/2 p-4 sm:p-6 md:p-10 flex flex-col bg-card overflow-hidden">
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar flex items-center">
+            <div className="w-full p-4 sm:p-6 md:p-10 flex flex-col bg-card overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 <motion.div
                   key={step}
                   initial={{ opacity: 0, y: 10 }}
