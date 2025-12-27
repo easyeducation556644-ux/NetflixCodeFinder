@@ -36,7 +36,6 @@ function translateUI(key, t, targetLang) {
 // Google Translate helper with batch support
 async function translateTextBatch(texts, targetLang) {
   if (!texts || texts.length === 0) return [];
-  if (targetLang === 'en') return texts;
   
   // Check cache first
   const results = [];
@@ -170,7 +169,7 @@ function EmailContent({ email, emailId, targetLanguage }) {
 
   // Start translation after showing original
   useEffect(() => {
-    if (!containerRef.current || !originalHtmlRef.current || targetLanguage === 'en') return;
+    if (!containerRef.current || !originalHtmlRef.current) return;
 
     let mounted = true;
 
