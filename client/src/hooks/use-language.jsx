@@ -53,6 +53,11 @@ export function LanguageProvider({ children }) {
   const t = getTranslations(language);
   const currentLang = LANGUAGES.find(l => l.code === language) || LANGUAGES[0];
 
+  useEffect(() => {
+    // If the language is one of the ones that only has partial hardcoded translations, 
+    // it will be handled by the auto-translator in the components, but we still need the base structure
+  }, [language]);
+
   return (
     <LanguageContext.Provider value={{ 
       language, 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,89 @@ import guideImage1 from "@/assets/stock_images/guide_1.png";
 import guideImage2 from "@/assets/stock_images/guide_2.png";
 
 export function InstructionGuide({ onComplete }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [step, setStep] = useState(0);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedSteps, setTranslatedSteps] = useState(null);
+
+  useEffect(() => {
+    async function translateSteps() {
+      // Always translate non-English to ensure everything is updated
+      if (language === 'en') {
+        setTranslatedSteps(null);
+        return;
+      }
+
+      setIsTranslating(true);
+      try {
+        const textsToTranslate = [
+          t.guide.welcome,
+          t.guide.welcomeSubtitle,
+          t.guide.partATitle,
+          t.guide.partAStep1,
+          t.guide.partAStep2,
+          t.guide.partAStep3,
+          t.guide.partAStep4,
+          t.guide.partBTitle,
+          t.guide.partBStep1,
+          t.guide.partBStep2,
+          t.guide.partBStep3,
+          t.guide.partBStep4,
+          t.guide.troubleshootingTitle,
+          t.guide.troubleshootingMethod1,
+          t.guide.troubleshootingMethod2,
+          t.guide.troubleshootingFooter,
+          t.guide.gotIt,
+          "Click next" // Index 17
+        ];
+
+        const promises = textsToTranslate.map(async (text) => {
+          if (!text) return "";
+          try {
+            const res = await fetch(
+              `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${language}&dt=t&q=${encodeURIComponent(text)}`
+            );
+            const data = await res.json();
+            return data[0].map(item => item[0]).join("");
+          } catch (err) {
+            return text;
+          }
+        });
+
+        const results = await Promise.all(promises);
+        setTranslatedSteps({
+          welcome: results[0],
+          welcomeSubtitle: results[1],
+          partATitle: results[2],
+          partAStep1: results[3],
+          partAStep2: results[4],
+          partAStep3: results[5],
+          partAStep4: results[6],
+          partBTitle: results[7],
+          partBStep1: results[8],
+          partBStep2: results[9],
+          partBStep3: results[10],
+          partBStep4: results[11],
+          troubleshootingTitle: results[12],
+          troubleshootingMethod1: results[13],
+          troubleshootingMethod2: results[14],
+          troubleshootingFooter: results[15],
+          gotIt: results[16],
+          clickNext: results[17]
+        });
+      } catch (err) {
+        console.error("Guide translation error:", err);
+      } finally {
+        setIsTranslating(false);
+      }
+    }
+    translateSteps();
+  }, [language, t]);
 
   const steps = [
     {
-      title: t.guide.welcome,
-      subtitle: t.guide.welcomeSubtitle,
+      title: translatedSteps?.welcome || t.guide.welcome,
+      subtitle: translatedSteps?.welcomeSubtitle || t.guide.welcomeSubtitle,
       content: [],
       image: guideImage1,
       type: "intro"
@@ -23,23 +99,33 @@ export function InstructionGuide({ onComplete }) {
       title: "Instructions",
       sections: [
         {
-          title: t.guide.partATitle,
-          content: [t.guide.partAStep1, t.guide.partAStep2, t.guide.partAStep3, t.guide.partAStep4]
+          title: translatedSteps?.partATitle || t.guide.partATitle,
+          content: [
+            translatedSteps?.partAStep1 || t.guide.partAStep1,
+            translatedSteps?.partAStep2 || t.guide.partAStep2,
+            translatedSteps?.partAStep3 || t.guide.partAStep3,
+            translatedSteps?.partAStep4 || t.guide.partAStep4
+          ]
         },
         {
-          title: t.guide.partBTitle,
-          content: [t.guide.partBStep1, t.guide.partBStep2, t.guide.partBStep3, t.guide.partBStep4]
+          title: translatedSteps?.partBTitle || t.guide.partBTitle,
+          content: [
+            translatedSteps?.partBStep1 || t.guide.partBStep1,
+            translatedSteps?.partBStep2 || t.guide.partBStep2,
+            translatedSteps?.partBStep3 || t.guide.partBStep3,
+            translatedSteps?.partBStep4 || t.guide.partBStep4
+          ]
         }
       ],
       image: guideImage2,
       type: "multi-steps"
     },
     {
-      title: t.guide.troubleshootingTitle,
+      title: translatedSteps?.troubleshootingTitle || t.guide.troubleshootingTitle,
       content: [
-        t.guide.troubleshootingMethod1,
-        t.guide.troubleshootingMethod2,
-        t.guide.troubleshootingFooter
+        translatedSteps?.troubleshootingMethod1 || t.guide.troubleshootingMethod1,
+        translatedSteps?.troubleshootingMethod2 || t.guide.troubleshootingMethod2,
+        translatedSteps?.troubleshootingFooter || t.guide.troubleshootingFooter
       ],
       image: guideImage2,
       type: "troubleshoot"
@@ -62,8 +148,6 @@ export function InstructionGuide({ onComplete }) {
 
   const formatText = (text) => {
     if (!text) return null;
-    
-    // Improved regex to avoid double matching and handle quotes correctly
     const urlRegex = /(https?:\/\/[^\s]+|netflix-code-finder\.vercel\.app)/g;
     const parts = text.split(urlRegex);
     
@@ -83,7 +167,7 @@ export function InstructionGuide({ onComplete }) {
               window.open(url, '_blank', 'noopener,noreferrer');
             }}
           >
-            {part.replace(/^https?:\/\//, '')}
+            {part.match(/netflix-code-finder\.vercel\.app/) ? (translatedSteps?.clickNext || "Click next") : part.replace(/^https?:\/\//, '')}
             <ExternalLink className="w-3 h-3 flex-shrink-0" />
           </a>
         );
@@ -102,7 +186,6 @@ export function InstructionGuide({ onComplete }) {
       >
         <Card className="overflow-hidden border-none bg-card/95 flex-1 flex flex-col">
           <CardContent className="p-0 flex-1 flex flex-col md:flex-row overflow-hidden">
-            {/* Image Section */}
             <div className="relative w-full md:w-2/5 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[200px] md:min-h-0 border-b md:border-b-0 md:border-r border-border/50">
               <AnimatePresence mode="wait">
                 <motion.img
@@ -126,7 +209,6 @@ export function InstructionGuide({ onComplete }) {
               </div>
             </div>
             
-            {/* Content Section */}
             <div className="w-full md:w-3/5 p-4 sm:p-6 md:p-8 flex flex-col bg-card overflow-hidden">
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 <motion.div
@@ -136,12 +218,12 @@ export function InstructionGuide({ onComplete }) {
                   transition={{ duration: 0.3 }}
                 >
                   <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide">
-                    {steps[step].title}
+                    {isTranslating ? "..." : steps[step].title}
                   </h2>
                   
                   {steps[step].subtitle && (
                     <p className="text-muted-foreground mb-4 text-xs md:text-sm italic border-l-4 border-primary/30 pl-3 py-1 bg-primary/5 rounded-r">
-                      {formatText(steps[step].subtitle)}
+                      {isTranslating ? "..." : formatText(steps[step].subtitle)}
                     </p>
                   )}
 
@@ -149,7 +231,7 @@ export function InstructionGuide({ onComplete }) {
                     {steps[step].type === "multi-steps" ? (
                       steps[step].sections.map((section, idx) => (
                         <div key={idx} className="space-y-3">
-                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1">{section.title}</h3>
+                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1">{isTranslating ? "..." : section.title}</h3>
                           <div className="space-y-2">
                             {section.content.map((text, i) => (
                               <div key={i} className="flex gap-2 items-start">
@@ -158,7 +240,7 @@ export function InstructionGuide({ onComplete }) {
                                 </div>
                                 <div className="flex-1">
                                   <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                                    {formatText(text)}
+                                    {isTranslating ? "..." : formatText(text)}
                                   </p>
                                 </div>
                               </div>
@@ -175,7 +257,7 @@ export function InstructionGuide({ onComplete }) {
                             <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                           )}
                           <div className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                            {formatText(text)}
+                            {isTranslating ? "..." : formatText(text)}
                           </div>
                         </div>
                       ))
@@ -203,7 +285,7 @@ export function InstructionGuide({ onComplete }) {
                 >
                   {step === steps.length - 1 ? (
                     <>
-                      {t.guide.gotIt}
+                      {isTranslating ? "..." : (translatedSteps?.gotIt || t.guide.gotIt)}
                       <Check className="w-3.5 h-3.5" />
                     </>
                   ) : (
