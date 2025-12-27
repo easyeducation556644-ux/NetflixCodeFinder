@@ -15,7 +15,18 @@ const translations = {
     showsLatestOnly: "Shows the latest Netflix email only",
     searchFailed: "Search Failed",
     noContent: "No content available",
-    validEmailError: "Please enter a valid email address."
+    validEmailError: "Please enter a valid email address.",
+    guide: {
+      welcome: "Welcome to Code Getter",
+      step1Title: "Open Netflix",
+      step1Desc: "Go to your Netflix app and request a temporary access code or household update.",
+      step2Title: "Enter Email",
+      step2Desc: "Enter your registered email address on this website to search for the code.",
+      step3Title: "Get Your Code",
+      step3Desc: "Our system will find the latest Netflix email and display the code for you instantly.",
+      gotIt: "Got It, Let's Start!",
+      backToGuide: "View Instructions"
+    }
   },
   bn: {
     title: "CODE GETTER",
@@ -32,7 +43,18 @@ const translations = {
     showsLatestOnly: "শুধুমাত্র সর্বশেষ Netflix ইমেইল দেখায়",
     searchFailed: "অনুসন্ধান ব্যর্থ",
     noContent: "কোনো কন্টেন্ট নেই",
-    validEmailError: "অনুগ্রহ করে একটি বৈধ ইমেইল ঠিকানা লিখুন।"
+    validEmailError: "অনুগ্রহ করে একটি বৈধ ইমেইল ঠিকানা লিখুন।",
+    guide: {
+      welcome: "Code Getter-এ আপনাকে স্বাগতম",
+      step1Title: "Netflix ওপেন করুন",
+      step1Desc: "আপনার Netflix অ্যাপে যান এবং একটি টেম্পোরারি অ্যাক্সেস কোড বা হাউসহোল্ড আপডেটের জন্য অনুরোধ করুন।",
+      step2Title: "ইমেইল লিখুন",
+      step2Desc: "কোডটি খোঁজার জন্য এই ওয়েবসাইটে আপনার নিবন্ধিত ইমেইল ঠিকানাটি লিখুন।",
+      step3Title: "কোডটি নিন",
+      step3Desc: "আমাদের সিস্টেম সর্বশেষ Netflix ইমেইলটি খুঁজে বের করবে এবং আপনার কোডটি তাৎক্ষণিকভাবে দেখাবে।",
+      gotIt: "বুঝতে পেরেছি, শুরু করি!",
+      backToGuide: "নির্দেশিকা দেখুন"
+    }
   },
   hi: {
     title: "CODE GETTER",
@@ -49,7 +71,18 @@ const translations = {
     showsLatestOnly: "केवल नवीनतम Netflix ईमेल दिखाता है",
     searchFailed: "खोज विफल",
     noContent: "कोई सामग्री उपलब्ध नहीं",
-    validEmailError: "कृपया एक वैध ईमेल पता दर्ज करें।"
+    validEmailError: "कृपया एक वैध ईमेल पता दर्ज करें।",
+    guide: {
+      welcome: "Code Getter में आपका स्वागत है",
+      step1Title: "Netflix खोलें",
+      step1Desc: "अपने Netflix ऐप पर जाएं और अस्थायी एक्सेस कोड या हाउसहोल्ड अपडेट का अनुरोध करें।",
+      step2Title: "ईमेल दर्ज करें",
+      step2Desc: "कोड खोजने के लिए इस वेबसाइट पर अपना पंजीकृत ईमेल पता दर्ज करें।",
+      step3Title: "अपना कोड प्राप्त करें",
+      step3Desc: "हमारा सिस्टम नवीनतम Netflix ईमेल ढूंढेगा और आपके लिए कोड तुरंत प्रदर्शित करेगा।",
+      gotIt: "समझ गया, शुरू करें!",
+      backToGuide: "निर्देश देखें"
+    }
   },
   es: {
     title: "CODE GETTER",
@@ -66,7 +99,18 @@ const translations = {
     showsLatestOnly: "Muestra solo el ultimo correo de Netflix",
     searchFailed: "Busqueda Fallida",
     noContent: "Sin contenido disponible",
-    validEmailError: "Por favor ingresa una direccion de correo valida."
+    validEmailError: "Por favor ingresa una direccion de correo valida.",
+    guide: {
+      welcome: "Bienvenido a Code Getter",
+      step1Title: "Abrir Netflix",
+      step1Desc: "Ve a tu aplicación de Netflix y solicita un código de acceso temporal o actualización de hogar.",
+      step2Title: "Ingresar Correo",
+      step2Desc: "Ingresa tu dirección de correo registrada en este sitio para buscar el código.",
+      step3Title: "Obtén tu Código",
+      step3Desc: "Nuestro sistema encontrará el último correo de Netflix y te mostrará el código al instante.",
+      gotIt: "¡Entendido, vamos!",
+      backToGuide: "Ver Instrucciones"
+    }
   },
   fr: {
     title: "CODE GETTER",

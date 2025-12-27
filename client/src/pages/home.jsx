@@ -378,6 +378,21 @@ export default function Home() {
           </Form>
         </motion.div>
 
+        {/* Re-view Guide Button */}
+        <div className="mt-8 flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              localStorage.removeItem("has-seen-guide");
+              window.location.reload();
+            }}
+            className="text-muted-foreground hover:text-primary transition-colors gap-2"
+          >
+            <span className="opacity-70">{t.guide.backToGuide}</span>
+          </Button>
+        </div>
+
         <AnimatePresence mode="wait">
           {results?.emails?.length > 0 && (
             <motion.div 
