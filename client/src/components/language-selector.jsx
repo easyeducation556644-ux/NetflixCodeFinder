@@ -32,7 +32,7 @@ export function LanguageSelector() {
       </button>
 
       <div 
-        className={`absolute top-full right-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl p-2 min-w-[200px] shadow-xl shadow-black/50 transition-all duration-200 ${
+        className={`absolute top-full right-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl p-2 min-w-[200px] max-h-[400px] overflow-y-auto shadow-xl shadow-black/50 transition-all duration-200 scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent ${
           isOpen 
             ? 'opacity-100 visible translate-y-0' 
             : 'opacity-0 invisible -translate-y-2'

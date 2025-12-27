@@ -15,9 +15,28 @@ import { useLanguage } from "@/hooks/use-language";
 // Translation cache - global persist
 const translationCache = new Map();
 
+// Helper to translate text using hardcoded translations first, then fallback to Google Translate
+function translateUI(key, t, targetLang) {
+  // If we have a nested key like 'guide.welcome'
+  const keys = key.split('.');
+  let value = t;
+  for (const k of keys) {
+    if (value && value[k]) {
+      value = value[k];
+    } else {
+      value = null;
+      break;
+    }
+  }
+  
+  if (typeof value === 'string') return value;
+  return key; // Fallback to key if not found
+}
+
 // Google Translate helper with batch support
 async function translateTextBatch(texts, targetLang) {
   if (!texts || texts.length === 0) return [];
+  if (targetLang === 'en') return texts;
   
   // Check cache first
   const results = [];
@@ -151,7 +170,7 @@ function EmailContent({ email, emailId, targetLanguage }) {
 
   // Start translation after showing original
   useEffect(() => {
-    if (!containerRef.current || !originalHtmlRef.current) return;
+    if (!containerRef.current || !originalHtmlRef.current || targetLanguage === 'en') return;
 
     let mounted = true;
 
@@ -191,14 +210,16 @@ function EmailContent({ email, emailId, targetLanguage }) {
         const nodeInfo = liveNodes[i];
         const translatedText = translatedTexts[i];
         
-        // Add blinking effect to parent element
-        nodeInfo.parent.classList.add('translating-line');
-        
-        // Update the text node
-        nodeInfo.node.nodeValue = translatedText;
-        
-        // Small delay for visual effect
-        await new Promise(r => setTimeout(r, 50));
+        if (translatedText && translatedText !== nodeInfo.originalText) {
+          // Add blinking effect to parent element
+          nodeInfo.parent.classList.add('translating-line');
+          
+          // Update the text node
+          nodeInfo.node.nodeValue = translatedText;
+          
+          // Small delay for visual effect
+          await new Promise(r => setTimeout(r, 50));
+        }
         
         if (!mounted) break;
         
