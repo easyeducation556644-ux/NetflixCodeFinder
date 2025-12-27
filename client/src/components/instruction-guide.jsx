@@ -223,32 +223,56 @@ export function InstructionGuide({ onComplete }) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide flex items-center gap-2">
-                    {steps[step].title}
+                  <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide flex items-center gap-2 min-h-[28px]">
+                    {isTranslating ? (
+                      <div className="h-6 w-48 bg-neutral-800 animate-pulse rounded" />
+                    ) : (
+                      steps[step].title
+                    )}
                     {isTranslating && <Loader2 className="w-4 h-4 animate-spin text-red-500" />}
                   </h2>
                   
                   {steps[step].subtitle && (
-                    <p className="text-muted-foreground mb-4 text-xs md:text-sm italic border-l-4 border-primary/30 pl-3 py-1 bg-primary/5 rounded-r">
-                      {formatText(steps[step].subtitle)}
-                    </p>
+                    <div className="mb-4 text-xs md:text-sm italic border-l-4 border-primary/30 pl-3 py-1 bg-primary/5 rounded-r min-h-[32px]">
+                      {isTranslating ? (
+                        <div className="space-y-2">
+                          <div className="h-3 w-full bg-neutral-800 animate-pulse rounded" />
+                          <div className="h-3 w-2/3 bg-neutral-800 animate-pulse rounded" />
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">{formatText(steps[step].subtitle)}</p>
+                      )}
+                    </div>
                   )}
 
                   <div className="space-y-4">
                     {steps[step].type === "multi-steps" ? (
                       steps[step].sections.map((section, idx) => (
                         <div key={idx} className="space-y-3">
-                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1">{section.title}</h3>
+                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1 min-h-[21px]">
+                            {isTranslating ? (
+                              <div className="h-4 w-32 bg-neutral-800 animate-pulse rounded" />
+                            ) : (
+                              section.title
+                            )}
+                          </h3>
                           <div className="space-y-2">
                             {section.content.map((text, i) => (
                               <div key={i} className="flex gap-2 items-start">
                                 <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold">
                                   {i + 1}
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                                    {formatText(text)}
-                                  </p>
+                                <div className="flex-1 min-h-[16px]">
+                                  {isTranslating ? (
+                                    <div className="space-y-1.5">
+                                      <div className="h-2.5 w-full bg-neutral-800 animate-pulse rounded" />
+                                      <div className="h-2.5 w-5/6 bg-neutral-800 animate-pulse rounded" />
+                                    </div>
+                                  ) : (
+                                    <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                                      {formatText(text)}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -257,14 +281,23 @@ export function InstructionGuide({ onComplete }) {
                       ))
                     ) : (
                       steps[step].content.map((text, i) => (
-                        <div key={i} className="flex gap-2 items-start bg-neutral-900/40 p-2 rounded border border-neutral-800/50">
+                        <div key={i} className="flex gap-2 items-start bg-neutral-900/40 p-2 rounded border border-neutral-800/50 min-h-[40px]">
                           {steps[step].type === "troubleshoot" ? (
                             <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                           ) : (
                             <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                           )}
-                          <div className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                            {formatText(text)}
+                          <div className="flex-1">
+                            {isTranslating ? (
+                              <div className="space-y-1.5">
+                                <div className="h-2.5 w-full bg-neutral-800 animate-pulse rounded" />
+                                <div className="h-2.5 w-4/5 bg-neutral-800 animate-pulse rounded" />
+                              </div>
+                            ) : (
+                              <div className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                                {formatText(text)}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))
