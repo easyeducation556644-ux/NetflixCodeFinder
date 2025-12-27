@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
-import { ChevronRight, ChevronLeft, Check, AlertCircle, Info, ExternalLink } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, AlertCircle, Info, ExternalLink, Loader2 } from "lucide-react";
 import guideImage1 from "@/assets/stock_images/guide_1.png";
 import guideImage2 from "@/assets/stock_images/guide_2.png";
 
@@ -15,8 +15,14 @@ export function InstructionGuide({ onComplete }) {
 
   useEffect(() => {
     async function translateSteps() {
-      // Always translate non-English to ensure everything is updated
       if (language === 'en') {
+        setTranslatedSteps(null);
+        return;
+      }
+
+      // Check if hardcoded
+      const isHardcoded = t.title && t.title !== "CODE GETTER";
+      if (isHardcoded) {
         setTranslatedSteps(null);
         return;
       }
@@ -41,14 +47,14 @@ export function InstructionGuide({ onComplete }) {
           t.guide.troubleshootingMethod2,
           t.guide.troubleshootingFooter,
           t.guide.gotIt,
-          "Click next" // Index 17
+          "Click next"
         ];
 
         const promises = textsToTranslate.map(async (text) => {
           if (!text) return "";
           try {
             const res = await fetch(
-              `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${language}&dt=t&q=${encodeURIComponent(text)}`
+              `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${language}&dt=t&q=${encodeURIComponent(text)}`
             );
             const data = await res.json();
             return data[0].map(item => item[0]).join("");
@@ -217,13 +223,14 @@ export function InstructionGuide({ onComplete }) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide">
-                    {isTranslating ? "..." : steps[step].title}
+                  <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide flex items-center gap-2">
+                    {steps[step].title}
+                    {isTranslating && <Loader2 className="w-4 h-4 animate-spin text-red-500" />}
                   </h2>
                   
                   {steps[step].subtitle && (
                     <p className="text-muted-foreground mb-4 text-xs md:text-sm italic border-l-4 border-primary/30 pl-3 py-1 bg-primary/5 rounded-r">
-                      {isTranslating ? "..." : formatText(steps[step].subtitle)}
+                      {formatText(steps[step].subtitle)}
                     </p>
                   )}
 
@@ -231,7 +238,7 @@ export function InstructionGuide({ onComplete }) {
                     {steps[step].type === "multi-steps" ? (
                       steps[step].sections.map((section, idx) => (
                         <div key={idx} className="space-y-3">
-                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1">{isTranslating ? "..." : section.title}</h3>
+                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1">{section.title}</h3>
                           <div className="space-y-2">
                             {section.content.map((text, i) => (
                               <div key={i} className="flex gap-2 items-start">
@@ -240,7 +247,7 @@ export function InstructionGuide({ onComplete }) {
                                 </div>
                                 <div className="flex-1">
                                   <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                                    {isTranslating ? "..." : formatText(text)}
+                                    {formatText(text)}
                                   </p>
                                 </div>
                               </div>
@@ -257,7 +264,7 @@ export function InstructionGuide({ onComplete }) {
                             <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                           )}
                           <div className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                            {isTranslating ? "..." : formatText(text)}
+                            {formatText(text)}
                           </div>
                         </div>
                       ))
@@ -285,7 +292,7 @@ export function InstructionGuide({ onComplete }) {
                 >
                   {step === steps.length - 1 ? (
                     <>
-                      {isTranslating ? "..." : (translatedSteps?.gotIt || t.guide.gotIt)}
+                      {translatedSteps?.gotIt || t.guide.gotIt}
                       <Check className="w-3.5 h-3.5" />
                     </>
                   ) : (
