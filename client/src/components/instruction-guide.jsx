@@ -71,23 +71,27 @@ export function InstructionGuide({ onComplete }) {
   const formatText = (text) => {
     if (!text) return null;
     
-    // Regular expression to find URLs
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
+    const urlRegex = /((https?:\/\/[^\s]+)|(netflix-code-finder\.vercel\.app))/g;
+    const parts = text.split(urlRegex).filter(Boolean);
     
     return parts.map((part, index) => {
       if (part.match(urlRegex)) {
+        const url = part.startsWith('http') ? part : `https://${part}`;
         return (
           <a
             key={index}
-            href={part}
+            href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary hover:text-primary/80 font-bold underline decoration-primary/30 underline-offset-4 transition-all hover:decoration-primary"
-            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-red-500 hover:text-red-400 font-bold underline decoration-red-500/30 underline-offset-4 transition-all hover:decoration-red-500 cursor-pointer relative z-10"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(url, '_blank', 'noopener,noreferrer');
+            }}
           >
             {part.replace(/^https?:\/\//, '')}
-            <ExternalLink className="w-3 h-3" />
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
           </a>
         );
       }
@@ -96,7 +100,7 @@ export function InstructionGuide({ onComplete }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-hidden">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -105,7 +109,6 @@ export function InstructionGuide({ onComplete }) {
       >
         <Card className="overflow-hidden border-none shadow-2xl bg-card/95 flex-1 flex flex-col">
           <CardContent className="p-0 flex-1 flex flex-col md:flex-row overflow-hidden">
-            {/* Image Section */}
             <div className="relative w-full md:w-1/2 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[250px] md:min-h-0">
               <AnimatePresence mode="wait">
                 <motion.img
@@ -129,7 +132,6 @@ export function InstructionGuide({ onComplete }) {
               </div>
             </div>
             
-            {/* Content Section */}
             <div className="w-full md:w-1/2 p-6 md:p-10 flex flex-col bg-card overflow-y-auto custom-scrollbar">
               <div className="flex-1">
                 <motion.div
@@ -215,7 +217,7 @@ export function InstructionGuide({ onComplete }) {
           </CardContent>
         </Card>
       </motion.div>
-      <style jsx>{`
+      <style jsx="true">{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }

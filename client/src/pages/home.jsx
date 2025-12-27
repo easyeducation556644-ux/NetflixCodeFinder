@@ -381,15 +381,15 @@ export default function Home() {
         {/* Re-view Guide Button */}
         <div className="mt-8 flex justify-center">
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             onClick={() => {
               localStorage.removeItem("has-seen-guide");
               window.location.reload();
             }}
-            className="text-muted-foreground hover:text-primary transition-colors gap-2"
+            className="bg-neutral-800 hover:bg-neutral-700 text-white transition-colors gap-2 px-6"
           >
-            <span className="opacity-70">{t.guide.backToGuide}</span>
+            <span className="font-medium">{t.guide.backToGuide}</span>
           </Button>
         </div>
 
