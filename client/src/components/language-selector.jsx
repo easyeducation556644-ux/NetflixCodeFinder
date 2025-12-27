@@ -19,7 +19,7 @@ export function LanguageSelector() {
   }, []);
 
   return (
-    <div className="fixed top-4 right-4 z-50" ref={dropdownRef}>
+    <div className="fixed top-4 right-4 z-[200]" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 bg-gradient-to-r from-neutral-900 to-neutral-800 border border-neutral-700 rounded-xl px-4 py-2.5 text-white font-medium text-sm transition-all duration-300 hover:border-red-600 hover:shadow-lg hover:shadow-red-900/20"

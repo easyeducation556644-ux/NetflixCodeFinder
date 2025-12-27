@@ -6,7 +6,6 @@ import { useLanguage } from "@/hooks/use-language";
 import { ChevronRight, ChevronLeft, Check, AlertCircle, Info, ExternalLink } from "lucide-react";
 import guideImage1 from "@/assets/stock_images/guide_1.png";
 import guideImage2 from "@/assets/stock_images/guide_2.png";
-import guideImage3 from "@/assets/stock_images/guide_3.png";
 
 export function InstructionGuide({ onComplete }) {
   const { t } = useLanguage();
@@ -21,26 +20,19 @@ export function InstructionGuide({ onComplete }) {
       type: "intro"
     },
     {
-      title: t.guide.partATitle,
-      content: [
-        t.guide.partAStep1,
-        t.guide.partAStep2,
-        t.guide.partAStep3,
-        t.guide.partAStep4
+      title: "Instructions",
+      sections: [
+        {
+          title: t.guide.partATitle,
+          content: [t.guide.partAStep1, t.guide.partAStep2, t.guide.partAStep3, t.guide.partAStep4]
+        },
+        {
+          title: t.guide.partBTitle,
+          content: [t.guide.partBStep1, t.guide.partBStep2, t.guide.partBStep3, t.guide.partBStep4]
+        }
       ],
       image: guideImage2,
-      type: "steps"
-    },
-    {
-      title: t.guide.partBTitle,
-      content: [
-        t.guide.partBStep1,
-        t.guide.partBStep2,
-        t.guide.partBStep3,
-        t.guide.partBStep4
-      ],
-      image: guideImage3,
-      type: "steps"
+      type: "multi-steps"
     },
     {
       title: t.guide.troubleshootingTitle,
@@ -49,7 +41,7 @@ export function InstructionGuide({ onComplete }) {
         t.guide.troubleshootingMethod2,
         t.guide.troubleshootingFooter
       ],
-      image: guideImage3,
+      image: guideImage2,
       type: "troubleshoot"
     }
   ];
@@ -71,11 +63,12 @@ export function InstructionGuide({ onComplete }) {
   const formatText = (text) => {
     if (!text) return null;
     
-    const urlRegex = /((https?:\/\/[^\s]+)|(netflix-code-finder\.vercel\.app))/g;
-    const parts = text.split(urlRegex).filter(Boolean);
+    // Improved regex to avoid double matching and handle quotes correctly
+    const urlRegex = /(https?:\/\/[^\s]+|netflix-code-finder\.vercel\.app)/g;
+    const parts = text.split(urlRegex);
     
     return parts.map((part, index) => {
-      if (part.match(urlRegex)) {
+      if (part && part.match(urlRegex)) {
         const url = part.startsWith('http') ? part : `https://${part}`;
         return (
           <a
@@ -83,7 +76,7 @@ export function InstructionGuide({ onComplete }) {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-red-500 hover:text-red-400 font-bold underline decoration-red-500/30 underline-offset-4 transition-all hover:decoration-red-500 cursor-pointer relative z-10"
+            className="inline-flex items-center gap-1 text-red-500 hover:text-red-400 font-bold underline decoration-red-500/30 underline-offset-4 transition-all hover:decoration-red-500 cursor-pointer relative z-[110]"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -100,16 +93,17 @@ export function InstructionGuide({ onComplete }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 backdrop-blur-md p-2 sm:p-4 overflow-hidden">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-5xl max-h-[95vh] flex flex-col"
+        className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col shadow-2xl"
       >
-        <Card className="overflow-hidden border-none shadow-2xl bg-card/95 flex-1 flex flex-col">
+        <Card className="overflow-hidden border-none bg-card/95 flex-1 flex flex-col">
           <CardContent className="p-0 flex-1 flex flex-col md:flex-row overflow-hidden">
-            <div className="relative w-full md:w-1/2 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[250px] md:min-h-0">
+            {/* Image Section */}
+            <div className="relative w-full md:w-2/5 bg-neutral-900 flex items-center justify-center overflow-hidden min-h-[200px] md:min-h-0 border-b md:border-b-0 md:border-r border-border/50">
               <AnimatePresence mode="wait">
                 <motion.img
                   key={step}
@@ -119,7 +113,7 @@ export function InstructionGuide({ onComplete }) {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="w-full h-full object-contain p-4 md:p-8"
+                  className="w-full h-full object-contain p-4 md:p-6"
                 />
               </AnimatePresence>
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-10">
@@ -132,83 +126,90 @@ export function InstructionGuide({ onComplete }) {
               </div>
             </div>
             
-            <div className="w-full md:w-1/2 p-6 md:p-10 flex flex-col bg-card overflow-y-auto custom-scrollbar">
-              <div className="flex-1">
+            {/* Content Section */}
+            <div className="w-full md:w-3/5 p-4 sm:p-6 md:p-8 flex flex-col bg-card overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 <motion.div
                   key={step}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <h2 className="text-xl md:text-2xl font-bold mb-4 text-primary leading-tight">
+                  <h2 className="text-lg md:text-xl font-bold mb-3 text-primary leading-tight uppercase tracking-wide">
                     {steps[step].title}
                   </h2>
                   
                   {steps[step].subtitle && (
-                    <p className="text-muted-foreground mb-6 text-sm md:text-base italic border-l-4 border-primary/30 pl-4 py-1">
+                    <p className="text-muted-foreground mb-4 text-xs md:text-sm italic border-l-4 border-primary/30 pl-3 py-1 bg-primary/5 rounded-r">
                       {formatText(steps[step].subtitle)}
                     </p>
                   )}
 
-                  <div className="space-y-6">
-                    {steps[step].content.map((text, i) => (
-                      <div key={i} className="group relative">
-                        {steps[step].type === "steps" ? (
-                          <div className="flex gap-4 items-start">
-                            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-sm font-bold shadow-sm">
-                              {i + 1}
-                            </div>
-                            <div className="flex-1 space-y-1">
-                              <p className="font-semibold text-foreground text-sm md:text-base">
-                                {formatText(text.split('\n')[0])}
-                              </p>
-                              <p className="text-xs md:text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                                {formatText(text.split('\n').slice(1).join('\n'))}
-                              </p>
-                            </div>
+                  <div className="space-y-4">
+                    {steps[step].type === "multi-steps" ? (
+                      steps[step].sections.map((section, idx) => (
+                        <div key={idx} className="space-y-3">
+                          <h3 className="text-sm font-bold text-foreground border-b border-border pb-1">{section.title}</h3>
+                          <div className="space-y-2">
+                            {section.content.map((text, i) => (
+                              <div key={i} className="flex gap-2 items-start">
+                                <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold">
+                                  {i + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                                    {formatText(text)}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ) : (
-                          <div className="flex gap-3 items-start bg-neutral-900/40 p-3 rounded-lg border border-neutral-800/50">
-                            {steps[step].type === "troubleshoot" ? (
-                              <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                            ) : (
-                              <Info className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                            )}
-                            <div className="text-sm md:text-base text-muted-foreground leading-relaxed whitespace-pre-line">
-                              {formatText(text)}
-                            </div>
+                        </div>
+                      ))
+                    ) : (
+                      steps[step].content.map((text, i) => (
+                        <div key={i} className="flex gap-2 items-start bg-neutral-900/40 p-2 rounded border border-neutral-800/50">
+                          {steps[step].type === "troubleshoot" ? (
+                            <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                          ) : (
+                            <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                          )}
+                          <div className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                            {formatText(text)}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </motion.div>
               </div>
               
-              <div className="flex items-center justify-between pt-8 mt-auto border-t border-border/50">
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-border/50">
                 <Button
                   variant="ghost"
+                  size="sm"
                   onClick={handleBack}
                   disabled={step === 0}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  className="gap-1.5 text-xs text-muted-foreground hover:text-foreground h-8"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
                   Back
                 </Button>
                 
                 <Button
+                  size="sm"
                   onClick={handleNext}
-                  className="gap-2 min-w-[130px] shadow-lg shadow-primary/20"
+                  className="gap-1.5 min-w-[100px] shadow-lg shadow-primary/20 h-8 text-xs font-bold"
                 >
                   {step === steps.length - 1 ? (
                     <>
                       {t.guide.gotIt}
-                      <Check className="w-4 h-4" />
+                      <Check className="w-3.5 h-3.5" />
                     </>
                   ) : (
                     <>
                       Next
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </>
                   )}
                 </Button>
@@ -219,13 +220,13 @@ export function InstructionGuide({ onComplete }) {
       </motion.div>
       <style jsx="true">{`
         .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+          width: 3px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: hsl(var(--muted-foreground) / 0.2);
+          background: hsl(var(--muted-foreground) / 0.3);
           border-radius: 10px;
         }
       `}</style>
